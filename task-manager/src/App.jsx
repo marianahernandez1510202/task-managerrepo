@@ -6,6 +6,7 @@ import LandingPage from "./pages/LandingPage/LandingPage";
 import LoginPage from "./pages/LoginPage/LoginPage";
 import DashboardPage from "./pages/Dashboard/DashboardPage";
 import MainLayout from "./layouts/MainLayout";
+import Register from "./pages/RegisterPage/RegisterPage";
 
 // Definimos el componente principal App
 const App = () => {
@@ -15,6 +16,7 @@ const App = () => {
       <Routes>
         {/* Ruta principal que muestra la página de inicio (LandingPage) */}
         <Route path="/" element={<LandingPage />} />
+        <Route path="/register" element={<Register />} />
 
         {/* Ruta para la página de inicio de sesión */}
         <Route path="/login" element={<LoginPage />} />
