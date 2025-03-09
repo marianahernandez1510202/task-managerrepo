@@ -1,48 +1,146 @@
-import { Layout, Menu } from "antd";
-import { Link, Outlet } from "react-router-dom";
-import { DashboardOutlined, UserOutlined, SettingOutlined } from '@ant-design/icons';  // Importamos los iconos de Ant Design
+// layouts/MainLayout.jsx
+import React, { useState } from 'react';
+import { Layout, Menu, Avatar, Dropdown, Button, Typography } from 'antd';
+import { 
+  MenuUnfoldOutlined, MenuFoldOutlined, 
+  TeamOutlined, UserOutlined, SettingOutlined,
+  DashboardOutlined, ProfileOutlined, LogoutOutlined
+} from '@ant-design/icons';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
-// Desestructuramos los componentes de Layout para usarlos fácilmente
 const { Header, Sider, Content } = Layout;
+const { Text } = Typography;
 
-const MainLayout = () => {
+const MainLayout = ({ user, onLogout }) => {
+  const [collapsed, setCollapsed] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Determinar la clave seleccionada en el menú según la ruta actual
+  const getSelectedKey = () => {
+    const path = location.pathname;
+    if (path === '/dashboard') return '1';
+    if (path.includes('/dashboard/groups')) return '2';
+    if (path.includes('/dashboard/users')) return '3';
+    if (path.includes('/dashboard/profile')) return '4';
+    if (path.includes('/dashboard/settings')) return '5';
+    return '1'; // Por defecto
+  };
+
+  // Menú de usuario para el header
+  const userMenu = (
+    <Menu>
+      <Menu.Item key="profile" icon={<ProfileOutlined />} onClick={() => navigate('/dashboard/profile')}>
+        Perfil
+      </Menu.Item>
+      <Menu.Item key="settings" icon={<SettingOutlined />} onClick={() => navigate('/dashboard/settings')}>
+        Configuración
+      </Menu.Item>
+      <Menu.Divider />
+      <Menu.Item key="logout" icon={<LogoutOutlined />} onClick={onLogout}>
+        Cerrar Sesión
+      </Menu.Item>
+    </Menu>
+  );
+
   return (
-    <Layout style={{ minHeight: "100vh", backgroundColor: "#f4f5f7" }}> {/* Fondo gris suave para toda la aplicación */}
-      
-      {/* Barra lateral de navegación */}
-      <Sider width={80} theme="light" style={{ backgroundColor: "#ffffff", borderRight: "1px solid #e0e0e0" }}> {/* Barra lateral blanca y borde gris */}
-        <Menu
-          theme="light"
-          mode="vertical"
-          style={{ height: "100%", borderRight: "none", paddingTop: "20px" }}  // Estilo vertical sin borde
+    <Layout style={{ minHeight: '100vh' }}>
+      <Sider trigger={null} collapsible collapsed={collapsed} theme="light">
+        <div style={{ 
+          height: '64px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          padding: '16px'
+        }}>
+          {!collapsed ? 
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              Task Manager
+            </Typography.Title> : 
+            <Avatar icon={<SettingOutlined />} />
+          }
+        </div>
+        <Menu 
+          theme="light" 
+          mode="inline" 
+          defaultSelectedKeys={[getSelectedKey()]}
+          selectedKeys={[getSelectedKey()]}
         >
-          <Menu.Item key="1" icon={<DashboardOutlined />} style={{ fontSize: "18px" }}>
-            <Link to="/dashboard">Dashboard</Link>  {/* Enlace al Dashboard */}
+          <Menu.Item key="1" icon={<DashboardOutlined />}>
+            <Link to="/dashboard">Dashboard</Link>
           </Menu.Item>
-          <Menu.Item key="2" icon={<UserOutlined />} style={{ fontSize: "18px" }}>
-            <Link to="/profile">Perfil</Link>  {/* Enlace al Perfil */}
+          
+          {/* Menú solo para superadmin */}
+          {user?.role === 'superadmin' && (
+            <>
+              <Menu.Item key="2" icon={<TeamOutlined />}>
+                <Link to="/dashboard/groups">Gestión de Grupos</Link>
+              </Menu.Item>
+              <Menu.Item key="3" icon={<UserOutlined />}>
+                <Link to="/dashboard/users">Gestión de Usuarios</Link>
+              </Menu.Item>
+            </>
+          )}
+          
+          <Menu.Item key="4" icon={<ProfileOutlined />}>
+            <Link to="/dashboard/profile">Perfil</Link>
           </Menu.Item>
-          <Menu.Item key="3" icon={<SettingOutlined />} style={{ fontSize: "18px" }}>
-            <Link to="/settings">Configuraciones</Link>  {/* Enlace a Configuraciones */}
+          <Menu.Item key="5" icon={<SettingOutlined />}>
+            <Link to="/dashboard/settings">Configuración</Link>
           </Menu.Item>
         </Menu>
       </Sider>
-    
-      {/* Contenedor principal de la página */}
-      <Layout style={{ backgroundColor: "#f4f5f7" }}>
-        
-        {/* Cabecera del Dashboard */}
-        <Header style={{ backgroundColor: "#4e73df", color: "#fff", padding: "20px", boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)" }}>
-          <h1 style={{ fontSize: "24px", textAlign: "center", margin: "0" }}>Dashboard</h1>  {/* Título en la cabecera */}
+      <Layout className="site-layout">
+        <Header 
+          style={{ 
+            padding: 0, 
+            background: '#fff',
+            boxShadow: '0 1px 4px rgba(0,21,41,.08)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}
+        >
+          <Button
+            type="text"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+            style={{ fontSize: '16px', width: 64, height: 64 }}
+          />
+          <div style={{ marginRight: 20 }}>
+            {user && (
+              <Dropdown overlay={userMenu} placement="bottomRight">
+                <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                  <Avatar 
+                    style={{ backgroundColor: '#1890ff' }}
+                    icon={<UserOutlined />} 
+                  />
+                  <Text style={{ marginLeft: 8 }}>
+                    {user.full_name || user.email}
+                    <small style={{ display: 'block', color: '#666' }}>
+                      {user.role === 'superadmin' ? 'Administrador' : 'Estudiante'}
+                    </small>
+                  </Text>
+                </div>
+              </Dropdown>
+            )}
+          </div>
         </Header>
-
-        {/* Contenido principal de la página */}
-        <Content style={{ margin: "20px", padding: "30px", backgroundColor: "#ffffff", borderRadius: "8px", boxShadow: "0 2px 10px rgba(0, 0, 0, 0.1)" }}>
-          <Outlet />  {/* Aquí se renderizarán las páginas secundarias según la ruta */}
+        <Content
+          style={{
+            margin: '24px 16px',
+            padding: 24,
+            minHeight: 280,
+            background: '#fff',
+            borderRadius: '4px',
+            overflow: 'auto'
+          }}
+        >
+          <Outlet />
         </Content>
       </Layout>
     </Layout>
   );
 };
 
-export default MainLayout;  // Exportamos el componente para su uso en otras partes del proyecto
+export default MainLayout;

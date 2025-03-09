@@ -1,11 +1,13 @@
+// pages/LoginPage/LoginPage.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { Form, Input, Button, Typography, Card, message } from "antd";
+import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import authService from "../../services/authService";
 
 const { Title, Text } = Typography;
 
-const LoginPage = () => {
+const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -13,16 +15,36 @@ const LoginPage = () => {
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:5000/api/login", values);
-      if (response.data.success) {
+      // Extraer email y password del objeto values
+      const { email, password } = values;
+      
+      // Llamar al servicio de autenticación con los valores individuales
+      const response = await authService.login(email, password);
+      
+      if (response.success) {
         message.success("Inicio de sesión exitoso");
-        localStorage.setItem("token", response.data.token);
-        navigate("/dashboard");
+        const token = response.token;
+        const userData = response.user;
+        
+        // Almacenar datos en localStorage y estado
+        localStorage.setItem("token", token);
+        if (onLogin) {
+          onLogin(userData, token);
+        }
+        
+        // Redireccionar según el rol del usuario
+        if (userData.role === 'superadmin') {
+          navigate("/admin/groups");
+        } else {
+          navigate("/student/dashboard");
+        }
       } else {
-        message.error(response.data.message);
+        message.error(response.message || "Error en el inicio de sesión");
       }
     } catch (error) {
-      message.error("Error en el inicio de sesión. Inténtalo nuevamente.");
+      console.error('Error en inicio de sesión:', error);
+      const errorMessage = error.response?.data?.message || "Error en el inicio de sesión. Verifica tus credenciales.";
+      message.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -35,7 +57,7 @@ const LoginPage = () => {
         justifyContent: "center",
         alignItems: "center",
         height: "100vh",
-        background: "linear-gradient(135deg, #6a11cb, #2575fc)", // Nuevo degradado azul-púrpura
+        background: "linear-gradient(135deg, #6a11cb, #2575fc)", // Degradado azul-púrpura
       }}
     >
       <Card
@@ -59,17 +81,32 @@ const LoginPage = () => {
               { type: "email", message: "Correo inválido" },
             ]}
           >
-            <Input placeholder="Ingresa tu correo" size="large" />
+            <Input 
+              prefix={<UserOutlined />}
+              placeholder="Ingresa tu correo" 
+              size="large" 
+            />
           </Form.Item>
           <Form.Item
             label={<Text style={{ fontWeight: 600 }}>Contraseña</Text>}
             name="password"
             rules={[{ required: true, message: "Ingresa tu contraseña" }]}
           >
-            <Input.Password placeholder="Ingresa tu contraseña" size="large" />
+            <Input.Password 
+              prefix={<LockOutlined />}
+              placeholder="Ingresa tu contraseña" 
+              size="large" 
+            />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit" block size="large" loading={loading} style={{ fontWeight: "bold" }}>
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              block 
+              size="large" 
+              loading={loading} 
+              style={{ fontWeight: "bold", background: "#6a11cb", borderColor: "#6a11cb" }}
+            >
               Iniciar sesión
             </Button>
           </Form.Item>
