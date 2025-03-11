@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 // Conectar a MongoDB
-mongoose.connect('mongodb://localhost:27017/web', {
+mongoose.connect('mongodb+srv://2022371082:marianahernandezdimas15102004@cluster0.k11jy.mongodb.net/test?retryWrites=true&w=majority', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 }).catch(err => console.error('Error al conectar a MongoDB:', err));

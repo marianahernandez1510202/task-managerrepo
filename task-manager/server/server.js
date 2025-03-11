@@ -4,6 +4,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+require('dotenv').config();
 
 const app = express();
 app.use(cors());
@@ -11,11 +12,12 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Conectar a MongoDB
-mongoose.connect("mongodb://localhost:27017/web", {
+mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://2022371082:marianahernandezdimas15102004@cluster0.k11jy.mongodb.net/task-manager?retryWrites=true&w=majority", {
   useNewUrlParser: true,
   useUnifiedTopology: true
-});
-
+})
+.then(() => console.log('Conexión exitosa a MongoDB Atlas'))
+.catch(err => console.error('Error al conectar a MongoDB Atlas:', err));
 // Definir esquema y modelo para Usuarios con roles
 const userSchema = new mongoose.Schema({
   full_name: { type: String, required: true },
@@ -26,7 +28,17 @@ const userSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now },
   last_login: { type: Date, default: Date.now },
 });
+// En server/server.js
+const path = require('path');
 
+if (process.env.NODE_ENV === 'production') {
+  // Ajusta esta ruta a donde se encuentre tu build de React
+  app.use(express.static(path.join(__dirname, '../src/build')));
+  
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../src/build/index.html'));
+  });
+}
 const User = mongoose.model("UserRecord", userSchema);
 
 // Definir esquema y modelo para Grupos

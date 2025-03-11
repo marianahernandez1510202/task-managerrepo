@@ -1,7 +1,9 @@
 // services/authService.js
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? '/api' 
+  : 'http://localhost:5000/api';
 const TOKEN_KEY = 'token';
 const USER_KEY = 'user_info';
 
