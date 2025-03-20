@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const API_URL = process.env.NODE_ENV === 'production' 
   ? '/api' 
-  : 'https://task-manager-back-pl79.onrender.com/api/';
+  : 'https://task-manager-back-pl79.onrender.com/';
 
 // Función para obtener el token del localStorage
 const getAuthHeader = () => {
