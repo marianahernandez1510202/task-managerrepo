@@ -15,7 +15,7 @@ const RegisterPage = () => {
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost:5000/api/register', {
+      const response = await axios.post('https://task-manager-back-pl79.onrender.com/api/register', {
         ...values,
         date_of_birth: values.date_of_birth.format('YYYY-MM-DD')
       });
