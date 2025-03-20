@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const API_URL = process.env.NODE_ENV === 'production' 
   ? '/api' 
-  : 'http://localhost:5000/api';
+  : 'https://task-manager-back-pl79.onrender.com/api/';
 const TOKEN_KEY = 'token';
 const USER_KEY = 'user_info';
 
