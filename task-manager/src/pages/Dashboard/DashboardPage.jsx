@@ -34,7 +34,7 @@ const StudentDashboard = () => {
 
   const token = localStorage.getItem('token');
   const headers = { "Authorization": `Bearer ${token}` };
-  const API_URL = 'http://localhost:5000/api';
+  const API_URL = 'https://task-manager-back-pl79.onrender.com/api';
 
   // Fetch groups assigned to the student
   const fetchGroups = async () => {
