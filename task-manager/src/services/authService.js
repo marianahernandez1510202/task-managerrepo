@@ -5,6 +5,10 @@ const API_URL = process.env.NODE_ENV === 'production'
   ? 'https://task-manager-back-pl79.onrender.com/api' 
   : 'http://localhost:5000/api';
 
+  const TOKEN_KEY = 'token';
+const USER_KEY = 'user_info';
+
+
 const authService = {
   // Iniciar sesión con email y password como parámetros separados
   login: async (email, password) => {
