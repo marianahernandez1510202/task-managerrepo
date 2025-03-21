@@ -1,6 +1,7 @@
 // apiConfig.js - Configuración básica de la API
-export const API_BASE_URL = 'https://task-manager-back-pl79.onrender.com';
-
+export const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://task-manager-back-pl79.onrender.com/api/' 
+  : 'http://localhost:5000/api/';
 // Configuración de opciones por defecto para las peticiones API
 export const defaultOptions = {
   headers: {

@@ -2,10 +2,8 @@
 import axios from 'axios';
 
 const API_URL = process.env.NODE_ENV === 'production' 
-  ? '/api' 
-  : 'https://task-manager-back-pl79.onrender.com';
-const TOKEN_KEY = 'token';
-const USER_KEY = 'user_info';
+  ? 'https://task-manager-back-pl79.onrender.com/api' 
+  : 'http://localhost:5000/api';
 
 const authService = {
   // Iniciar sesión con email y password como parámetros separados
