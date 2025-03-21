@@ -1,8 +1,8 @@
 // services/personalTaskService.js
 import axios from 'axios';
 const API_URL = process.env.NODE_ENV === 'production' 
-  ? '/api' 
-  : 'https://task-manager-back-pl79.onrender.com';
+  ? 'https://task-manager-back-pl79.onrender.com/api' 
+  : 'http://localhost:5000/api';
 
 // Función para obtener el token del localStorage
 const getAuthHeader = () => {

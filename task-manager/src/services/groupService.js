@@ -3,8 +3,8 @@ import axios from 'axios';
 import authService from './authService';
 
 const API_URL = process.env.NODE_ENV === 'production' 
-  ? '/api' 
-  : 'https://task-manager-back-pl79.onrender.com';
+  ? 'https://task-manager-back-pl79.onrender.com/api' 
+  : 'http://localhost:5000/api';
 
 // Configuración para incluir el token en las peticiones
 const authAxios = () => {
