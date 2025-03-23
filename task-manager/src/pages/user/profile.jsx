@@ -40,7 +40,7 @@ const Profile = ({ user }) => {
         date_of_birth: values.date_of_birth ? values.date_of_birth.format('YYYY-MM-DD') : null
       };
       
-      const response = await axios.put(`http://localhost:5000/api/users/${user.id}`, formattedValues, { headers });
+      const response = await axios.put(`http://task-manager-back-pl79.onrender.com/api/users/${user.id}`, formattedValues, { headers });
       
       // Actualizar el usuario en localStorage
       const updatedUser = { ...user, ...response.data.user };
@@ -62,7 +62,7 @@ const Profile = ({ user }) => {
       const token = localStorage.getItem('token');
       const headers = { "Authorization": `Bearer ${token}` };
       
-      await axios.post(`http://localhost:5000/api/users/change-password`, {
+      await axios.post(`http://task-manager-back-pl79.onrender.com/api/users/change-password`, {
         current_password: values.current_password,
         new_password: values.new_password
       }, { headers });
