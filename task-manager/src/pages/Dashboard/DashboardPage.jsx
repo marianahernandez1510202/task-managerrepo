@@ -1,7 +1,7 @@
 // StudentDashboard.jsx - Componente actualizado con tareas personales
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from "react-router-dom";
-import { message } from "antd";
+
 import axios from 'axios';
 import { 
   Card, List, Button, Tag, message, Modal, Tabs, Typography, Collapse, Badge, 
