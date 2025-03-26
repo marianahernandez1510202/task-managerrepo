@@ -131,11 +131,15 @@ const RegisterPage = () => {
             </Button>
           </Form.Item>
 
-          <div style={{ textAlign: 'center' }}>
-            <Text style={{ color: '#6a11cb' }}>
-              ¿Ya tienes una cuenta? <a href="/login" style={{ fontWeight: 'bold', color: '#1890ff' }}>Inicia Sesión</a>
-            </Text>
-          </div>
+          <Form.Item>
+  <Button 
+    type="link" 
+    onClick={() => navigate('/login')} 
+    style={{ fontWeight: 'bold', color: '#1890ff', textAlign: 'center', width: '100%' }}
+  >
+    ¿Ya tienes una cuenta? Inicia Sesión
+  </Button>
+</Form.Item>
         </Form>
       </Card>
     </div>
