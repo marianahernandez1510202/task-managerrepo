@@ -1,11 +1,11 @@
-// StudentDashboard.jsx - Componente actualizado con tareas personales
+// StudentDashboard.jsx - Componente actualizado con tareas por sección y columnas
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from "react-router-dom";
 
 import axios from 'axios';
 import { 
   Card, List, Button, Tag, message, Modal, Tabs, Typography, Collapse, Badge, 
-  Form, Input, DatePicker, Select, Space, Popconfirm, Empty
+  Form, Input, DatePicker, Select, Space, Popconfirm, Empty, Row, Col, Divider
 } from 'antd';
 import { 
   CheckCircleOutlined, CheckCircleFilled, ClockCircleOutlined, LogoutOutlined,
@@ -21,6 +21,7 @@ const { TextArea } = Input;
 const { Option } = Select;
 
 const StudentDashboard = () => {
+  const navigate = useNavigate();
   const [groups, setGroups] = useState([]);
   const [personalTasks, setPersonalTasks] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
@@ -144,8 +145,6 @@ const StudentDashboard = () => {
 
   // Logout and destroy token
   const handleDestroyToken = () => {
-    const navigate = useNavigate(); // Obtener la función de navegación
-  
     try {
       // Eliminar token y datos del usuario del localStorage
       localStorage.removeItem("token");
@@ -205,6 +204,21 @@ const StudentDashboard = () => {
     setPersonalTaskModalVisible(true);
   };
 
+  // Agrupar tareas por categoría
+  const groupTasksByCategory = (tasks) => {
+    const grouped = {};
+    
+    tasks.forEach(task => {
+      const category = task.category || 'Sin Categoría';
+      if (!grouped[category]) {
+        grouped[category] = [];
+      }
+      grouped[category].push(task);
+    });
+    
+    return grouped;
+  };
+
   const TaskCard = ({ task, isPersonal = false }) => {
     // For personal tasks, use the 'completed' field
     // For group tasks, check if completed by current user
@@ -226,19 +240,21 @@ const StudentDashboard = () => {
         style={{ 
           marginBottom: 16,
           borderLeft: completed ? '5px solid #52c41a' : isPastDue ? '5px solid #f5222d' : '5px solid #1890ff',
-          width: '100%'
+          height: '100%'
         }}
         actions={
           isPersonal ? [
             <Button 
               icon={<EditOutlined />}
               onClick={() => showEditPersonalTaskModal(task)}
+              size="small"
             >
               Editar
             </Button>,
             <Button 
               type={completed ? 'default' : 'primary'}
               onClick={() => handleTogglePersonalTaskCompletion(task._id, completed)}
+              size="small"
             >
               {completed ? 'Marcar Pendiente' : 'Completar'}
             </Button>,
@@ -248,7 +264,7 @@ const StudentDashboard = () => {
               okText="Sí"
               cancelText="No"
             >
-              <Button icon={<DeleteOutlined />} danger>Eliminar</Button>
+              <Button icon={<DeleteOutlined />} danger size="small">Eliminar</Button>
             </Popconfirm>
           ] : [
             <Button 
@@ -257,6 +273,7 @@ const StudentDashboard = () => {
                 setSelectedTask(task);
                 setTaskModalVisible(true);
               }}
+              size="small"
             >
               Ver Detalles
             </Button>
@@ -269,9 +286,6 @@ const StudentDashboard = () => {
           <Tag color={isPastDue ? 'red' : 'blue'} icon={<ClockCircleOutlined />}>
             {deadlineDate.toLocaleString()}
           </Tag>
-          {task.category && (
-            <Tag color="purple">{task.category}</Tag>
-          )}
         </div>
       </Card>
     );
@@ -303,6 +317,10 @@ const StudentDashboard = () => {
     // Separate tasks into pending and completed
     const pendingTasks = tasks.filter(task => !isTaskCompletedByMe(task));
     const completedTasks = tasks.filter(task => isTaskCompletedByMe(task));
+    
+    // Agrupar tareas pendientes por categoría
+    const pendingByCategory = groupTasksByCategory(pendingTasks);
+    const completedByCategory = groupTasksByCategory(completedTasks);
 
     return (
       <div>
@@ -315,16 +333,29 @@ const StudentDashboard = () => {
             } 
             key="pending"
           >
-            <List
-              loading={loading}
-              dataSource={pendingTasks}
-              renderItem={task => (
-                <List.Item>
-                  <TaskCard task={task} />
-                </List.Item>
-              )}
-              locale={{ emptyText: 'No hay tareas pendientes' }}
-            />
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
+            ) : pendingTasks.length === 0 ? (
+              <Empty 
+                description="No hay tareas pendientes" 
+                image={Empty.PRESENTED_IMAGE_SIMPLE} 
+              />
+            ) : (
+              Object.entries(pendingByCategory).map(([category, categoryTasks]) => (
+                <div key={category} style={{ marginBottom: 20 }}>
+                  <Divider orientation="left">
+                    <Tag color="cyan" style={{ fontSize: '16px', padding: '5px 10px' }}>{category}</Tag>
+                  </Divider>
+                  <Row gutter={[16, 16]}>
+                    {categoryTasks.map(task => (
+                      <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                        <TaskCard task={task} />
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              ))
+            )}
           </TabPane>
           <TabPane 
             tab={
@@ -334,16 +365,29 @@ const StudentDashboard = () => {
             } 
             key="completed"
           >
-            <List
-              loading={loading}
-              dataSource={completedTasks}
-              renderItem={task => (
-                <List.Item>
-                  <TaskCard task={task} />
-                </List.Item>
-              )}
-              locale={{ emptyText: 'No hay tareas completadas' }}
-            />
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
+            ) : completedTasks.length === 0 ? (
+              <Empty 
+                description="No hay tareas completadas" 
+                image={Empty.PRESENTED_IMAGE_SIMPLE} 
+              />
+            ) : (
+              Object.entries(completedByCategory).map(([category, categoryTasks]) => (
+                <div key={category} style={{ marginBottom: 20 }}>
+                  <Divider orientation="left">
+                    <Tag color="cyan" style={{ fontSize: '16px', padding: '5px 10px' }}>{category}</Tag>
+                  </Divider>
+                  <Row gutter={[16, 16]}>
+                    {categoryTasks.map(task => (
+                      <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                        <TaskCard task={task} />
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              ))
+            )}
           </TabPane>
         </Tabs>
       </div>
@@ -354,6 +398,10 @@ const StudentDashboard = () => {
     // Separate tasks into pending and completed
     const pendingTasks = personalTasks.filter(task => !task.completed);
     const completedTasks = personalTasks.filter(task => task.completed);
+    
+    // Agrupar tareas por categoría
+    const pendingByCategory = groupTasksByCategory(pendingTasks);
+    const completedByCategory = groupTasksByCategory(completedTasks);
 
     return (
       <div>
@@ -376,21 +424,28 @@ const StudentDashboard = () => {
             } 
             key="pending"
           >
-            {pendingTasks.length === 0 ? (
+            {personalTasksLoading ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
+            ) : pendingTasks.length === 0 ? (
               <Empty 
                 description="No tienes tareas pendientes" 
                 image={Empty.PRESENTED_IMAGE_SIMPLE} 
               />
             ) : (
-              <List
-                loading={personalTasksLoading}
-                dataSource={pendingTasks}
-                renderItem={task => (
-                  <List.Item>
-                    <TaskCard task={task} isPersonal={true} />
-                  </List.Item>
-                )}
-              />
+              Object.entries(pendingByCategory).map(([category, categoryTasks]) => (
+                <div key={category} style={{ marginBottom: 20 }}>
+                  <Divider orientation="left">
+                    <Tag color="purple" style={{ fontSize: '16px', padding: '5px 10px' }}>{category}</Tag>
+                  </Divider>
+                  <Row gutter={[16, 16]}>
+                    {categoryTasks.map(task => (
+                      <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                        <TaskCard task={task} isPersonal={true} />
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              ))
             )}
           </TabPane>
           <TabPane 
@@ -401,21 +456,28 @@ const StudentDashboard = () => {
             } 
             key="completed"
           >
-            {completedTasks.length === 0 ? (
+            {personalTasksLoading ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
+            ) : completedTasks.length === 0 ? (
               <Empty 
                 description="No tienes tareas completadas" 
                 image={Empty.PRESENTED_IMAGE_SIMPLE} 
               />
             ) : (
-              <List
-                loading={personalTasksLoading}
-                dataSource={completedTasks}
-                renderItem={task => (
-                  <List.Item>
-                    <TaskCard task={task} isPersonal={true} />
-                  </List.Item>
-                )}
-              />
+              Object.entries(completedByCategory).map(([category, categoryTasks]) => (
+                <div key={category} style={{ marginBottom: 20 }}>
+                  <Divider orientation="left">
+                    <Tag color="purple" style={{ fontSize: '16px', padding: '5px 10px' }}>{category}</Tag>
+                  </Divider>
+                  <Row gutter={[16, 16]}>
+                    {categoryTasks.map(task => (
+                      <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                        <TaskCard task={task} isPersonal={true} />
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              ))
             )}
           </TabPane>
         </Tabs>

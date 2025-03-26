@@ -73,9 +73,7 @@ const MainLayout = ({ user, onLogout }) => {
           {/* Menú solo para superadmin */}
           {user?.role === 'superadmin' && (
             <>
-              <Menu.Item key="2" icon={<TeamOutlined />}>
-                <Link to="/dashboard/groups">Gestión de Grupos</Link>
-              </Menu.Item>
+              
               <Menu.Item key="3" icon={<UserOutlined />}>
                 <Link to="/dashboard/users">Gestión de Usuarios</Link>
               </Menu.Item>
