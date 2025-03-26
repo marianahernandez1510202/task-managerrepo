@@ -112,8 +112,16 @@ const LoginPage = ({ onLogin }) => {
           </Form.Item>
         </Form>
         <Text style={{ display: "block", textAlign: "center", marginTop: "12px", color: "#6a11cb" }}>
-          ¿No tienes cuenta? <a href="/register" style={{ fontWeight: "bold", color: "#1890ff" }}>Registrarse</a>
-        </Text>
+  ¿No tienes cuenta?  
+  <Button 
+    type="link" 
+    onClick={() => navigate('/register')} 
+    style={{ fontWeight: 'bold', color: '#1890ff' }}
+  >
+    Registrarse
+  </Button>
+</Text>
+
       </Card>
     </div>
   );
