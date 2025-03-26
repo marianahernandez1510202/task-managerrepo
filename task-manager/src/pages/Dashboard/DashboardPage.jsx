@@ -1,5 +1,7 @@
 // StudentDashboard.jsx - Componente actualizado con tareas personales
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from "react-router-dom";
+import { message } from "antd";
 import axios from 'axios';
 import { 
   Card, List, Button, Tag, message, Modal, Tabs, Typography, Collapse, Badge, 
@@ -142,18 +144,20 @@ const StudentDashboard = () => {
 
   // Logout and destroy token
   const handleDestroyToken = () => {
+    const navigate = useNavigate(); // Obtener la función de navegación
+  
     try {
-      // Eliminar token del localStorage
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      
-      message.success('Sesión cerrada correctamente');
-      
-      // Redirigir al usuario a la página de login
-      window.location.href = '/login';
+      // Eliminar token y datos del usuario del localStorage
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+  
+      message.success("Sesión cerrada correctamente");
+  
+      // Redirigir al usuario a la página de login sin recargar la página
+      navigate("/login");
     } catch (error) {
-      console.error('Error al cerrar sesión:', error);
-      message.error('Error al cerrar la sesión');
+      console.error("Error al cerrar sesión:", error);
+      message.error("Error al cerrar la sesión");
     }
   };
 
