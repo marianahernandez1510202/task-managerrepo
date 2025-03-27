@@ -152,8 +152,11 @@ const StudentDashboard = () => {
   
       message.success("Sesión cerrada correctamente");
   
-      // Redirigir al usuario a la página de login sin recargar la página
+      // Redirigir al usuario a la página de login usando el hook navigate
       navigate("/login");
+      
+      // Cerrar el modal de confirmación
+      setLogoutModalVisible(false);
     } catch (error) {
       console.error("Error al cerrar sesión:", error);
       message.error("Error al cerrar la sesión");
