@@ -300,12 +300,7 @@ const GroupManager = () => {
           >
             Crear Grupo
           </Button>
-          <Button 
-            type="danger" 
-            onClick={handleLogout}
-          >
-            Cerrar Sesión
-          </Button>
+          
         </div>
       </div>
 
