@@ -492,13 +492,7 @@ const StudentDashboard = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={2}>Dashboard de Estudiante</Title>
-        <Button 
-          type="danger" 
-          icon={<LogoutOutlined />} 
-          onClick={showLogoutConfirm}
-        >
-          Cerrar Sesión
-        </Button>
+      
       </div>
       
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
@@ -680,25 +674,7 @@ const StudentDashboard = () => {
       </Modal>
 
       {/* Modal de confirmación para cerrar sesión */}
-      <Modal
-        title="Cerrar Sesión"
-        open={logoutModalVisible}
-        onCancel={() => setLogoutModalVisible(false)}
-        footer={[
-          <Button key="back" onClick={() => setLogoutModalVisible(false)}>
-            Cancelar
-          </Button>,
-          <Button 
-            key="submit" 
-            type="danger" 
-            onClick={handleDestroyToken}
-          >
-            Confirmar Cierre de Sesión
-          </Button>,
-        ]}
-      >
-        <p>¿Estás seguro que deseas cerrar la sesión? Se destruirán los tokens de autenticación.</p>
-      </Modal>
+      
     </div>
   );
 };
