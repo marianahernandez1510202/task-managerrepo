@@ -153,7 +153,7 @@ const StudentDashboard = () => {
       message.success("Sesión cerrada correctamente");
   
       // Redirigir al usuario a la página de login usando el hook navigate
-      navigate("/login");
+      navigate('/login');
       
       // Cerrar el modal de confirmación
       setLogoutModalVisible(false);
