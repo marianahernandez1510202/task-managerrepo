@@ -7,7 +7,7 @@ import axios from 'axios';
 import { 
   Card, List, Button, Tag, message, Modal, Tabs, Typography, Collapse, Badge, 
   Form, Input, DatePicker, Select, Space, Popconfirm, Empty, Row, Col, Divider,
-  FloatButton,Radio
+  FloatButton, Radio
 } from 'antd';
 import { 
   CheckCircleOutlined, CheckCircleFilled, ClockCircleOutlined, LogoutOutlined,
@@ -100,13 +100,13 @@ const StudentDashboard = () => {
         
         message.success(isCompleted ? 'Tarea marcada como pendiente' : 'Tarea marcada como completada');
         
-        // Actualizar los datos de tareas para reflejar el cambio
-        const updatedGroups = [...groups];
-        setGroups([]);
-        setTimeout(() => {
-          setGroups(updatedGroups);
-          fetchGroups(); // Esto actualizará los datos de todos los grupos
-        }, 100);
+        // Cerrar el modal después de actualizar
+        setTaskModalVisible(false);
+        
+        // Actualizar las tareas del grupo para reflejar el cambio
+        if (selectedGroup) {
+          fetchGroups();
+        }
       } else {
         message.error('No se pudo actualizar el estado de la tarea');
       }
@@ -135,12 +135,7 @@ const StudentDashboard = () => {
       
       // Refresh the group tasks
       if (selectedGroup) {
-        const updatedGroups = [...groups];
-        setGroups([]);
-        setTimeout(() => {
-          setGroups(updatedGroups);
-          fetchGroups();
-        }, 100);
+        fetchGroups();
       }
     } catch (error) {
       console.error('Error updating task status:', error);
@@ -154,20 +149,8 @@ const StudentDashboard = () => {
       await axios.post(`${API_URL}/personal-tasks/${taskId}/toggle-complete`, {}, { headers });
       message.success(isCompleted ? 'Tarea marcada como pendiente' : 'Tarea marcada como completada');
       
-      // Actualizar las tareas y forzar la actualización de pestañas
+      // Actualizar las tareas
       await fetchPersonalTasks();
-      
-      // Opcional: Cambiar a la pestaña apropiada cuando cambia el estado de la tarea
-      const tabsRef = document.querySelector('.ant-tabs-nav-list');
-      if (tabsRef) {
-        const tabToClick = isCompleted ? 
-          tabsRef.querySelector('.ant-tabs-tab:first-child') :  // Cambiar a la pestaña Pendientes
-          tabsRef.querySelector('.ant-tabs-tab:nth-child(2)');  // Cambiar a la pestaña Completadas
-          
-        if (tabToClick) {
-          tabToClick.click();
-        }
-      }
     } catch (error) {
       console.error('Error toggling personal task completion:', error);
       message.error('Error al cambiar el estado de la tarea');
@@ -316,14 +299,15 @@ const StudentDashboard = () => {
 
   // Agrupar tareas por estado
   const groupTasksByStatus = (tasks) => {
+    // Inicializar el objeto para todos los estados posibles
     const grouped = {};
-    
     taskStatuses.forEach(status => {
       grouped[status.value] = [];
     });
     
+    // Asignar cada tarea a su estado correspondiente
     tasks.forEach(task => {
-      if (task.status && grouped[task.status]) {
+      if (task.status && grouped[task.status] !== undefined) {
         grouped[task.status].push(task);
       } else {
         // Si el estado no está definido, asignar a "In Progress" por defecto
@@ -409,7 +393,8 @@ const StudentDashboard = () => {
   const GroupTasks = ({ groupId }) => {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [viewMode, setViewMode] = useState('category'); // 'category' o 'status'
+    const [viewMode, setViewMode] = useState('status'); // 'category' o 'status' por defecto status
+    const [activeTabKey, setActiveTabKey] = useState('pending');
 
     const fetchTasks = async () => {
       setLoading(true);
@@ -430,11 +415,11 @@ const StudentDashboard = () => {
       }
     }, [groupId]);
 
-    // Separate tasks into pending and completed
+    // Filtrar tareas completadas y pendientes
     const pendingTasks = tasks.filter(task => !isTaskCompletedByMe(task));
     const completedTasks = tasks.filter(task => isTaskCompletedByMe(task));
     
-    // Agrupar tareas pendientes por categoría o estado
+    // Agrupar tareas por categoría o estado
     const pendingByCategory = groupTasksByCategory(pendingTasks);
     const pendingByStatus = groupTasksByStatus(pendingTasks);
     const completedByCategory = groupTasksByCategory(completedTasks);
@@ -446,13 +431,19 @@ const StudentDashboard = () => {
             value={viewMode} 
             onChange={(e) => setViewMode(e.target.value)}
             buttonStyle="solid"
-          >
-            <Radio.Button value="category">Por Categoría</Radio.Button>
-            <Radio.Button value="status">Por Estado</Radio.Button>
-          </Radio.Group>
+            optionType="button"
+            options={[
+              { label: 'Por Categoría', value: 'category' },
+              { label: 'Por Estado', value: 'status' }
+            ]}
+          />
         </div>
 
-        <Tabs defaultActiveKey="pending">
+        <Tabs 
+          activeKey={activeTabKey}
+          onChange={setActiveTabKey} 
+          defaultActiveKey="pending"
+        >
           <TabPane 
             tab={
               <span>
@@ -486,13 +477,15 @@ const StudentDashboard = () => {
               ))
             ) : (
               // Vista por estado
-              Object.entries(pendingByStatus).map(([status, statusTasks]) => {
+              taskStatuses.map(status => {
+                const statusTasks = pendingByStatus[status.value] || [];
                 if (statusTasks.length === 0) return null;
+                
                 return (
-                  <div key={status} style={{ marginBottom: 20 }}>
+                  <div key={status.value} style={{ marginBottom: 20 }}>
                     <Divider orientation="left">
-                      <Tag color={getStatusColor(status)} style={{ fontSize: '16px', padding: '5px 10px' }}>
-                        {getStatusLabel(status)}
+                      <Tag color={getStatusColor(status.value)} style={{ fontSize: '16px', padding: '5px 10px' }}>
+                        {status.label}
                       </Tag>
                     </Divider>
                     <Row gutter={[16, 16]}>
@@ -545,13 +538,14 @@ const StudentDashboard = () => {
   };
 
   const PersonalTasksList = () => {
-    const [viewMode, setViewMode] = useState('category'); // 'category' o 'status'
+    const [viewMode, setViewMode] = useState('status'); // 'category' o 'status' por defecto status
+    const [activeTabKey, setActiveTabKey] = useState('pending');
     
-    // Separate tasks into pending and completed
+    // Filtrar tareas completadas y pendientes
     const pendingTasks = personalTasks.filter(task => !task.completed);
     const completedTasks = personalTasks.filter(task => task.completed);
     
-    // Agrupar tareas pendientes por categoría o estado
+    // Agrupar tareas por categoría o estado
     const pendingByCategory = groupTasksByCategory(pendingTasks);
     const pendingByStatus = groupTasksByStatus(pendingTasks);
     const completedByCategory = groupTasksByCategory(completedTasks);
@@ -563,13 +557,19 @@ const StudentDashboard = () => {
             value={viewMode} 
             onChange={(e) => setViewMode(e.target.value)}
             buttonStyle="solid"
-          >
-            <Radio.Button value="category">Por Categoría</Radio.Button>
-            <Radio.Button value="status">Por Estado</Radio.Button>
-          </Radio.Group>
+            optionType="button"
+            options={[
+              { label: 'Por Categoría', value: 'category' },
+              { label: 'Por Estado', value: 'status' }
+            ]}
+          />
         </div>
 
-        <Tabs defaultActiveKey="pending">
+        <Tabs 
+          activeKey={activeTabKey}
+          onChange={setActiveTabKey}
+          defaultActiveKey="pending"
+        >
           <TabPane 
             tab={
               <span>
@@ -603,13 +603,15 @@ const StudentDashboard = () => {
               ))
             ) : (
               // Vista por estado
-              Object.entries(pendingByStatus).map(([status, statusTasks]) => {
+              taskStatuses.map(status => {
+                const statusTasks = pendingByStatus[status.value] || [];
                 if (statusTasks.length === 0) return null;
+                
                 return (
-                  <div key={status} style={{ marginBottom: 20 }}>
+                  <div key={status.value} style={{ marginBottom: 20 }}>
                     <Divider orientation="left">
-                      <Tag color={getStatusColor(status)} style={{ fontSize: '16px', padding: '5px 10px' }}>
-                        {getStatusLabel(status)}
+                      <Tag color={getStatusColor(status.value)} style={{ fontSize: '16px', padding: '5px 10px' }}>
+                        {status.label}
                       </Tag>
                     </Divider>
                     <Row gutter={[16, 16]}>
@@ -677,8 +679,7 @@ const StudentDashboard = () => {
               Grupos y Tareas Asignadas
             </span>
           } 
-          key="groups"
-        >
+          key="groups">
           {groups.length === 0 ? (
             <Card>
               <Empty 
