@@ -1,6 +1,6 @@
-// components/Settings.jsx
+// pages/user/settings.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { 
   Card, Typography, List, Switch, Divider, Row, Col, Tabs, 
   Button, message, Form, Radio, Select, TimePicker, Modal, Empty
@@ -15,12 +15,14 @@ import {
 } from '@ant-design/icons';
 import moment from 'moment';
 import axios from 'axios';
+import { ThemeContext } from '../../context/ThemeContext';
 
 const { Title, Text, Paragraph } = Typography;  
 const { TabPane } = Tabs;
 const { Option } = Select;
 
 const Settings = () => {
+  const { theme, toggleTheme } = useContext(ThemeContext);
   const [loading, setLoading] = useState(false);
   const [formNotifications] = Form.useForm();
   const [formAppearance] = Form.useForm();
@@ -30,14 +32,14 @@ const Settings = () => {
     emailNotifications: true,
     pushNotifications: true,
     taskReminders: true,
-    darkMode: false,
+    darkMode: theme === 'dark',
     language: 'es',
     timezone: 'America/Mexico_City',
     reminderTime: null,
   });
   
   // Cargar configuraciones del usuario
-  React.useEffect(() => {
+  useEffect(() => {
     // Aquí podrías hacer una petición al backend para obtener las configuraciones del usuario
     // Por ahora usamos valores predeterminados
     formNotifications.setFieldsValue({
@@ -92,6 +94,9 @@ const Settings = () => {
       // Aquí harías la petición al backend para guardar las configuraciones
       // await axios.post('http://localhost:5000/api/settings/appearance', values, { headers });
       
+      // Actualizar el tema usando ThemeContext
+      toggleTheme(values.darkMode);
+      
       // Por ahora solo actualizamos el estado local
       setSettings(prev => ({
         ...prev,
@@ -110,7 +115,7 @@ const Settings = () => {
   };
 
   return (
-    <div>
+    <div className={theme === 'dark' ? 'dark-theme' : ''}>
       <Title level={2} style={{ color: '#6a11cb', marginBottom: 24 }}>Configuraciones</Title>
       
       <Tabs defaultActiveKey="notifications">
@@ -241,7 +246,7 @@ const Settings = () => {
               layout="vertical"
               onFinish={saveAppearanceSettings}
               initialValues={{
-                darkMode: false,
+                darkMode: theme === 'dark',
                 language: 'es',
                 timezone: 'America/Mexico_City'
               }}

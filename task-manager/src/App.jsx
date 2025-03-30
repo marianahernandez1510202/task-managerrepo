@@ -15,6 +15,9 @@ import Profile from './pages/user/profile';
 import Settings from './pages/user/settings';
 import LandingPage from './pages/LandingPage/LandingPage';
 
+// Importar ThemeProvider
+import { ThemeProvider } from './context/ThemeContext';
+
 const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,40 +53,42 @@ const App = () => {
   }
 
   return (
-    <ConfigProvider locale={esES}>
-      <Router>
-        <Routes>
-          {/* Ruta de landing page */}
-          <Route path="/" element={<LandingPage />} />
-          
-          {/* Rutas públicas */}
-          <Route path="/login" element={
-            !user ? <LoginPage onLogin={handleLogin} /> : <Navigate to="/dashboard" />
-          } />
-          <Route path="/register" element={
-            !user ? <Register /> : <Navigate to="/dashboard" />
-          } />
-
-          {/* Rutas protegidas dentro del layout principal */}
-          <Route path="/dashboard" element={
-            user ? <MainLayout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
-          }>
-            <Route index element={
-              user?.role === 'superadmin' ? <GroupManager /> : <StudentDashboard />
+    <ThemeProvider>
+      <ConfigProvider locale={esES}>
+        <Router>
+          <Routes>
+            {/* Ruta de landing page */}
+            <Route path="/" element={<LandingPage />} />
+            
+            {/* Rutas públicas */}
+            <Route path="/login" element={
+              !user ? <LoginPage onLogin={handleLogin} /> : <Navigate to="/dashboard" />
             } />
-            {/* Rutas exclusivas para super administrador */}
-            {user?.role === 'superadmin' && (
-              <Route path="users" element={<UserManagement />} />
-            )}
-            <Route path="profile" element={<Profile user={user} />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
+            <Route path="/register" element={
+              !user ? <Register /> : <Navigate to="/dashboard" />
+            } />
 
-          {/* Ruta para cualquier otra dirección no definida */}
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
-      </Router>
-    </ConfigProvider>
+            {/* Rutas protegidas dentro del layout principal */}
+            <Route path="/dashboard" element={
+              user ? <MainLayout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />
+            }>
+              <Route index element={
+                user?.role === 'superadmin' ? <GroupManager /> : <StudentDashboard />
+              } />
+              {/* Rutas exclusivas para super administrador */}
+              {user?.role === 'superadmin' && (
+                <Route path="users" element={<UserManagement />} />
+              )}
+              <Route path="profile" element={<Profile user={user} />} />
+              <Route path="settings" element={<Settings />} />
+            </Route>
+
+            {/* Ruta para cualquier otra dirección no definida */}
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </Router>
+      </ConfigProvider>
+    </ThemeProvider>
   );
 };
 

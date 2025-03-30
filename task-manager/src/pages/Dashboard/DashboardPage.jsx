@@ -1,11 +1,11 @@
-// StudentDashboard.jsx - Componente actualizado con tareas por sección y columnas
-import React, { useState, useEffect } from 'react';
+// StudentDashboard.jsx - Componente completo actualizado
+import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from "react-router-dom";
-
 import axios from 'axios';
 import { 
   Card, List, Button, Tag, message, Modal, Tabs, Typography, Collapse, Badge, 
-  Form, Input, DatePicker, Select, Space, Popconfirm, Empty, Row, Col, Divider
+  Form, Input, DatePicker, Select, Space, Popconfirm, Empty, Row, Col, Divider,
+  FloatButton
 } from 'antd';
 import { 
   CheckCircleOutlined, CheckCircleFilled, ClockCircleOutlined, LogoutOutlined,
@@ -13,6 +13,7 @@ import {
 } from '@ant-design/icons';
 import moment from 'moment';
 import 'moment/locale/es';
+import { ThemeContext } from '../../context/ThemeContext'; // Asegúrate de ajustar la ruta correcta
 
 const { Title, Paragraph, Text } = Typography;
 const { TabPane } = Tabs;
@@ -34,6 +35,8 @@ const StudentDashboard = () => {
   const [editingPersonalTask, setEditingPersonalTask] = useState(null);
   const [taskForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('groups');
+  const [editingTaskStatus, setEditingTaskStatus] = useState(null);
+  const { theme } = useContext(ThemeContext);
 
   const token = localStorage.getItem('token');
   const headers = { "Authorization": `Bearer ${token}` };
@@ -79,15 +82,31 @@ const StudentDashboard = () => {
   // Toggle task completion status (for group tasks)
   const handleToggleTaskCompletion = async (taskId, isCompleted) => {
     try {
-      await axios.post(`${API_URL}/tasks/${taskId}/complete`, {}, { headers });
-      message.success(isCompleted ? 'Tarea marcada como pendiente' : 'Tarea marcada como completada');
-      setTaskModalVisible(false);
+      const response = await axios.post(`${API_URL}/tasks/${taskId}/complete`, {}, { headers });
       
-      // Refresh the tasks
-      fetchGroups();
+      // Check if the response was successful
+      if (response.data && response.data.task) {
+        // Update the selectedTask immediately to reflect changes without refetching
+        setSelectedTask(response.data.task);
+        
+        message.success(isCompleted ? 'Tarea marcada como pendiente' : 'Tarea marcada como completada');
+        
+        // Refresh the tasks data to ensure the UI is updated
+        if (selectedGroup) {
+          // Force re-fetch of the current group's tasks
+          const updatedGroups = [...groups];
+          setGroups([]);
+          setTimeout(() => {
+            setGroups(updatedGroups);
+            fetchGroups(); // Re-fetch to get updated data
+          }, 100);
+        }
+      } else {
+        message.error('No se pudo actualizar el estado de la tarea');
+      }
     } catch (error) {
       console.error('Error toggling task completion:', error);
-      message.error('Error al cambiar el estado de la tarea');
+      message.error('Error al cambiar el estado de la tarea: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -96,7 +115,21 @@ const StudentDashboard = () => {
     try {
       await axios.post(`${API_URL}/personal-tasks/${taskId}/toggle-complete`, {}, { headers });
       message.success(isCompleted ? 'Tarea marcada como pendiente' : 'Tarea marcada como completada');
-      fetchPersonalTasks();
+      
+      // Refresh the tasks and force re-render of tabs
+      await fetchPersonalTasks();
+      
+      // Optional: Switch to the appropriate tab when the task state changes
+      const tabsRef = document.querySelector('.ant-tabs-nav-list');
+      if (tabsRef) {
+        const tabToClick = isCompleted ? 
+          tabsRef.querySelector('.ant-tabs-tab:first-child') :  // Switch to Pending tab
+          tabsRef.querySelector('.ant-tabs-tab:nth-child(2)');  // Switch to Completed tab
+          
+        if (tabToClick) {
+          tabToClick.click();
+        }
+      }
     } catch (error) {
       console.error('Error toggling personal task completion:', error);
       message.error('Error al cambiar el estado de la tarea');
@@ -140,6 +173,46 @@ const StudentDashboard = () => {
     } catch (error) {
       console.error('Error deleting personal task:', error);
       message.error('Error al eliminar la tarea personal');
+    }
+  };
+
+  // Update task status
+  const handleUpdateTaskStatus = async (taskId, newStatus) => {
+    try {
+      // For personal tasks
+      if (activeTab === 'personal') {
+        await axios.put(`${API_URL}/personal-tasks/${taskId}`, 
+          { status: newStatus }, 
+          { headers }
+        );
+        fetchPersonalTasks();
+      } 
+      // For group tasks
+      else {
+        await axios.put(`${API_URL}/tasks/${taskId}`, 
+          { status: newStatus }, 
+          { headers }
+        );
+        
+        // Update the selected task in state
+        if (selectedTask) {
+          setSelectedTask({
+            ...selectedTask,
+            status: newStatus
+          });
+        }
+        
+        // Refresh the group tasks
+        if (selectedGroup) {
+          fetchGroups();
+        }
+      }
+      
+      message.success('Estado actualizado correctamente');
+      setEditingTaskStatus(null); // Exit editing mode
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      message.error('Error al actualizar el estado de la tarea');
     }
   };
 
@@ -489,10 +562,12 @@ const StudentDashboard = () => {
   };
 
   return (
-    <div>
+    <div className={theme === 'dark' ? 'dark-theme' : ''}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={2}>Dashboard de Estudiante</Title>
-      
+        <Button onClick={showLogoutConfirm} icon={<LogoutOutlined />}>
+          Cerrar Sesión
+        </Button>
       </div>
       
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
@@ -552,7 +627,10 @@ const StudentDashboard = () => {
       <Modal
         title="Detalles de la Tarea"
         open={taskModalVisible}
-        onCancel={() => setTaskModalVisible(false)}
+        onCancel={() => {
+          setTaskModalVisible(false);
+          setEditingTaskStatus(null); // Reset when closing
+        }}
         footer={[
           <Button key="back" onClick={() => setTaskModalVisible(false)}>
             Cerrar
@@ -570,6 +648,15 @@ const StudentDashboard = () => {
               : 'Marcar como Completada'
             }
           </Button>,
+          // Add status change button if appropriate
+          selectedTask && !isTaskCompletedByMe(selectedTask) && (
+            <Button 
+              key="changeStatus" 
+              onClick={() => setEditingTaskStatus(selectedTask.status)}
+            >
+              Cambiar Estado
+            </Button>
+          )
         ]}
       >
         {selectedTask && (
@@ -579,7 +666,27 @@ const StudentDashboard = () => {
             
             <Collapse defaultActiveKey={['1']}>
               <Panel header="Información de la Tarea" key="1">
-                <p><strong>Estado:</strong> <Tag color={getStatusColor(selectedTask.status)}>{selectedTask.status}</Tag></p>
+                <p>
+                  <strong>Estado:</strong> 
+                  {editingTaskStatus ? (
+                    <Select 
+                      value={editingTaskStatus}
+                      onChange={(value) => {
+                        setEditingTaskStatus(value);
+                        // Update task status in backend
+                        handleUpdateTaskStatus(selectedTask._id, value);
+                      }}
+                      style={{ width: 150, marginLeft: 10 }}
+                    >
+                      <Option value="In Progress">En Progreso</Option>
+                      <Option value="Done">Hecho</Option>
+                      <Option value="Paused">Pausado</Option>
+                      <Option value="Revision">Revisión</Option>
+                    </Select>
+                  ) : (
+                    <Tag color={getStatusColor(selectedTask.status)}>{selectedTask.status}</Tag>
+                  )}
+                </p>
                 <p><strong>Fecha Límite:</strong> {new Date(selectedTask.dead_line).toLocaleString()}</p>
                 {selectedTask.category && (
                   <p><strong>Categoría:</strong> {selectedTask.category}</p>
@@ -592,89 +699,127 @@ const StudentDashboard = () => {
 
       {/* Modal para crear/editar tarea personal */}
       <Modal
-        title={editingPersonalTask ? "Editar Tarea Personal" : "Crear Tarea Personal"}
-        open={personalTaskModalVisible}
-        onCancel={() => {
-          setPersonalTaskModalVisible(false);
-          setEditingPersonalTask(null);
-          taskForm.resetFields();
-        }}
-        footer={null}
-      >
-        <Form
-          form={taskForm}
-          layout="vertical"
-          onFinish={handleSavePersonalTask}
+  title={editingPersonalTask ? "Editar Tarea Personal" : "Crear Tarea Personal"}
+  open={personalTaskModalVisible}
+  onCancel={() => {
+    setPersonalTaskModalVisible(false);
+    setEditingPersonalTask(null);
+    taskForm.resetFields();
+  }}
+  footer={null}
+  // No añadir className aquí para mantener el estilo normal del modal
+>
+  <Form
+    form={taskForm}
+    layout="vertical"
+    onFinish={handleSavePersonalTask}
+  >
+    {/* Dejar los inputs normales */}
+    <Form.Item
+      name="name_task"
+      label="Nombre de la Tarea"
+      rules={[{ required: true, message: 'Por favor ingresa el nombre de la tarea' }]}
+    >
+      <Input placeholder="Nombre de la tarea" />
+    </Form.Item>
+    
+    <Form.Item
+      name="description"
+      label="Descripción"
+      rules={[{ required: true, message: 'Por favor ingresa una descripción' }]}
+    >
+      <TextArea rows={4} placeholder="Descripción de la tarea" />
+    </Form.Item>
+    
+    <Form.Item
+      name="dead_line"
+      label="Fecha de Vencimiento"
+      rules={[{ required: true, message: 'Por favor selecciona una fecha de vencimiento' }]}
+    >
+      <DatePicker 
+        showTime 
+        format="DD/MM/YYYY HH:mm" 
+        placeholder="Selecciona fecha y hora"
+        style={{ width: '100%' }}
+        // Solo aplicar al dropdown, no al componente principal
+        dropdownClassName={theme === 'dark' ? 'dark-theme' : ''}
+        popupClassName={theme === 'dark' ? 'dark-theme' : ''}
+      />
+    </Form.Item>
+    
+    <Form.Item
+      name="status"
+      label="Estado"
+      rules={[{ required: true, message: 'Por favor selecciona un estado' }]}
+    >
+<Select 
+  placeholder="Selecciona un estado"
+  dropdownClassName="ant-select-dropdown-dark"
+  className={theme === 'dark' ? 'ant-select-dark' : ''}
+  style={theme === 'dark' ? { 
+    backgroundColor: '#1f1f1f', 
+    color: 'white',
+    borderColor: '#303030'
+  } : {}}
+>
+  <Option value="In Progress">En Progreso</Option>
+  <Option value="Paused">Pausada</Option>
+  <Option value="Revision">En Revisión</Option>
+  <Option value="Done">Completada</Option>
+</Select>
+    </Form.Item>
+    
+    <Form.Item
+      name="category"
+      label="Categoría"
+    >
+      <Input placeholder="Categoría de la tarea (opcional)" />
+    </Form.Item>
+    
+    <Form.Item>
+      <Space>
+        <Button type="primary" htmlType="submit">
+          {editingPersonalTask ? "Actualizar" : "Crear"}
+        </Button>
+        <Button 
+          onClick={() => {
+            setPersonalTaskModalVisible(false);
+            setEditingPersonalTask(null);
+            taskForm.resetFields();
+          }}
         >
-          <Form.Item
-            name="name_task"
-            label="Nombre de la Tarea"
-            rules={[{ required: true, message: 'Por favor ingresa el nombre de la tarea' }]}
-          >
-            <Input placeholder="Nombre de la tarea" />
-          </Form.Item>
-          
-          <Form.Item
-            name="description"
-            label="Descripción"
-            rules={[{ required: true, message: 'Por favor ingresa una descripción' }]}
-          >
-            <TextArea rows={4} placeholder="Descripción de la tarea" />
-          </Form.Item>
-          
-          <Form.Item
-            name="dead_line"
-            label="Fecha de Vencimiento"
-            rules={[{ required: true, message: 'Por favor selecciona una fecha de vencimiento' }]}
-          >
-            <DatePicker 
-              showTime 
-              format="DD/MM/YYYY HH:mm" 
-              placeholder="Selecciona fecha y hora"
-              style={{ width: '100%' }}
-            />
-          </Form.Item>
-          
-          <Form.Item
-            name="status"
-            label="Estado"
-            rules={[{ required: true, message: 'Por favor selecciona un estado' }]}
-          >
-            <Select placeholder="Selecciona un estado">
-              <Option value="In Progress">En Progreso</Option>
-              <Option value="Paused">Pausada</Option>
-              <Option value="Revision">En Revisión</Option>
-            </Select>
-          </Form.Item>
-          
-          <Form.Item
-            name="category"
-            label="Categoría"
-          >
-            <Input placeholder="Categoría de la tarea (opcional)" />
-          </Form.Item>
-          
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit">
-                {editingPersonalTask ? "Actualizar" : "Crear"}
-              </Button>
-              <Button 
-                onClick={() => {
-                  setPersonalTaskModalVisible(false);
-                  setEditingPersonalTask(null);
-                  taskForm.resetFields();
-                }}
-              >
-                Cancelar
-              </Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
+          Cancelar
+        </Button>
+      </Space>
+    </Form.Item>
+  </Form>
+</Modal>
 
       {/* Modal de confirmación para cerrar sesión */}
+      <Modal
+        title="Cerrar Sesión"
+        open={logoutModalVisible}
+        onOk={handleDestroyToken}
+        onCancel={() => setLogoutModalVisible(false)}
+        okText="Sí, cerrar sesión"
+        cancelText="Cancelar"
+      >
+        <p>¿Estás seguro de que deseas cerrar la sesión?</p>
+      </Modal>
       
+      {/* Floating action button */}
+      <FloatButton
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => {
+          if (activeTab === 'personal') {
+            showCreatePersonalTaskModal();
+          } else if (activeTab === 'groups' && selectedGroup) {
+            showCreatePersonalTaskModal();
+          }
+        }}
+        tooltip={activeTab === 'personal' ? 'Nueva tarea personal' : 'Nueva tarea'}
+      />
     </div>
   );
 };
