@@ -115,30 +115,44 @@ const StudentDashboard = () => {
     }
   };
 
-  // Update task status
+  // Update task status - Versión corregida
   const handleUpdateTaskStatus = async (taskId, newStatus) => {
     try {
+      console.log("Actualizando estado de tarea:", taskId, "a", newStatus);
+      
       // For group tasks
       const response = await axios.put(`${API_URL}/tasks/${taskId}`, 
         { status: newStatus }, 
         { headers }
       );
       
+      console.log("Respuesta del servidor (actualización de estado):", response.data);
+      
       if (response.data && response.data.task) {
         // Update the selected task in state
         setSelectedTask(response.data.task);
-      }
-      
-      message.success('Estado actualizado correctamente');
-      setEditingTaskStatus(null); // Exit editing mode
-      
-      // Refresh the group tasks
-      if (selectedGroup) {
-        fetchGroups();
+        message.success('Estado actualizado correctamente');
+        
+        // Refresh the group tasks
+        if (selectedGroup) {
+          // Cerrar el modal de edición de estado
+          setEditingTaskStatus(null);
+          
+          // Refrescar todas las tareas del grupo
+          const groupIndex = groups.findIndex(g => g._id === selectedGroup);
+          if (groupIndex !== -1) {
+            const updatedGroups = [...groups];
+            
+            // Forzar una actualización completa desde el servidor
+            await fetchGroups();
+          }
+        }
+      } else {
+        message.error('No se pudo actualizar el estado de la tarea');
       }
     } catch (error) {
       console.error('Error updating task status:', error);
-      message.error('Error al actualizar el estado de la tarea');
+      message.error('Error al actualizar el estado de la tarea: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -398,7 +412,9 @@ const StudentDashboard = () => {
     const fetchTasks = async () => {
       setLoading(true);
       try {
+        console.log("Obteniendo tareas del grupo:", groupId);
         const response = await axios.get(`${API_URL}/groups/${groupId}/tasks`, { headers });
+        console.log("Tareas del grupo recibidas:", response.data);
         setTasks(response.data);
       } catch (error) {
         console.error('Error fetching tasks:', error);
@@ -413,6 +429,13 @@ const StudentDashboard = () => {
         fetchTasks();
       }
     }, [groupId]);
+
+    // Agregar efecto para refrescar tareas cuando se cierre el modal
+    useEffect(() => {
+      if (!taskModalVisible && groupId) {
+        fetchTasks();
+      }
+    }, [taskModalVisible, groupId]);
 
     // Filtrar tareas completadas y pendientes
     const pendingTasks = tasks.filter(task => !isTaskCompletedByMe(task));
@@ -837,16 +860,8 @@ const StudentDashboard = () => {
               ? 'Marcar como Pendiente' 
               : 'Marcar como Completada'
             }
-          </Button>,
-          // Añadir botón para cambiar el estado
-          selectedTask && !isTaskCompletedByMe(selectedTask) && (
-            <Button 
-              key="changeStatus" 
-              onClick={() => setEditingTaskStatus(selectedTask.status)}
-            >
-              Cambiar Estado
-            </Button>
-          )
+          </Button>
+          // El botón para cambiar estado se ha movido a cada línea de información
         ]}
         wrapClassName={theme === 'dark' ? 'dark-theme' : ''}
       >
@@ -874,9 +889,19 @@ const StudentDashboard = () => {
                       ))}
                     </Select>
                   ) : (
-                    <Tag color={getStatusColor(selectedTask.status)}>
-                      {getStatusLabel(selectedTask.status)}
-                    </Tag>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <Tag color={getStatusColor(selectedTask.status)}>
+                        {getStatusLabel(selectedTask.status)}
+                      </Tag>
+                      <Button 
+                        type="link" 
+                        size="small" 
+                        onClick={() => setEditingTaskStatus(selectedTask.status)}
+                        style={{ marginLeft: 8 }}
+                      >
+                        Cambiar
+                      </Button>
+                    </div>
                   )}
                 </p>
                 <p><strong>Fecha Límite:</strong> {new Date(selectedTask.dead_line).toLocaleString()}</p>
