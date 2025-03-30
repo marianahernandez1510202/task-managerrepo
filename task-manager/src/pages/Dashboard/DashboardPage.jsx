@@ -1,6 +1,8 @@
-// StudentDashboard.jsx - Componente completo actualizado
+// StudentDashboard.jsx - Componente actualizado con tareas por sección y columnas
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from "react-router-dom";
+import { ThemeContext } from '../../context/ThemeContext'; // Ajusta la ruta según tu estructura
+
 import axios from 'axios';
 import { 
   Card, List, Button, Tag, message, Modal, Tabs, Typography, Collapse, Badge, 
@@ -13,7 +15,6 @@ import {
 } from '@ant-design/icons';
 import moment from 'moment';
 import 'moment/locale/es';
-import { ThemeContext } from '../../context/ThemeContext'; // Asegúrate de ajustar la ruta correcta
 
 const { Title, Paragraph, Text } = Typography;
 const { TabPane } = Tabs;
@@ -23,6 +24,7 @@ const { Option } = Select;
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
+  const { theme } = useContext(ThemeContext);
   const [groups, setGroups] = useState([]);
   const [personalTasks, setPersonalTasks] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
@@ -36,7 +38,14 @@ const StudentDashboard = () => {
   const [taskForm] = Form.useForm();
   const [activeTab, setActiveTab] = useState('groups');
   const [editingTaskStatus, setEditingTaskStatus] = useState(null);
-  const { theme } = useContext(ThemeContext);
+
+  // Definimos los estados disponibles para las tareas
+  const taskStatuses = [
+    { value: 'In Progress', label: 'En Progreso' },
+    { value: 'Done', label: 'Hecho' },
+    { value: 'Paused', label: 'Pausado' },
+    { value: 'Revision', label: 'Revisión' }
+  ];
 
   const token = localStorage.getItem('token');
   const headers = { "Authorization": `Bearer ${token}` };
@@ -84,23 +93,20 @@ const StudentDashboard = () => {
     try {
       const response = await axios.post(`${API_URL}/tasks/${taskId}/complete`, {}, { headers });
       
-      // Check if the response was successful
+      // Verificar si la respuesta contiene la tarea actualizada
       if (response.data && response.data.task) {
-        // Update the selectedTask immediately to reflect changes without refetching
+        // Actualizar la tarea seleccionada inmediatamente
         setSelectedTask(response.data.task);
         
         message.success(isCompleted ? 'Tarea marcada como pendiente' : 'Tarea marcada como completada');
         
-        // Refresh the tasks data to ensure the UI is updated
-        if (selectedGroup) {
-          // Force re-fetch of the current group's tasks
-          const updatedGroups = [...groups];
-          setGroups([]);
-          setTimeout(() => {
-            setGroups(updatedGroups);
-            fetchGroups(); // Re-fetch to get updated data
-          }, 100);
-        }
+        // Actualizar los datos de tareas para reflejar el cambio
+        const updatedGroups = [...groups];
+        setGroups([]);
+        setTimeout(() => {
+          setGroups(updatedGroups);
+          fetchGroups(); // Esto actualizará los datos de todos los grupos
+        }, 100);
       } else {
         message.error('No se pudo actualizar el estado de la tarea');
       }
@@ -110,21 +116,53 @@ const StudentDashboard = () => {
     }
   };
 
+  // Update task status
+  const handleUpdateTaskStatus = async (taskId, newStatus) => {
+    try {
+      // For group tasks
+      const response = await axios.put(`${API_URL}/tasks/${taskId}`, 
+        { status: newStatus }, 
+        { headers }
+      );
+      
+      if (response.data && response.data.task) {
+        // Update the selected task in state
+        setSelectedTask(response.data.task);
+      }
+      
+      message.success('Estado actualizado correctamente');
+      setEditingTaskStatus(null); // Exit editing mode
+      
+      // Refresh the group tasks
+      if (selectedGroup) {
+        const updatedGroups = [...groups];
+        setGroups([]);
+        setTimeout(() => {
+          setGroups(updatedGroups);
+          fetchGroups();
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      message.error('Error al actualizar el estado de la tarea');
+    }
+  };
+
   // Toggle personal task completion
   const handleTogglePersonalTaskCompletion = async (taskId, isCompleted) => {
     try {
       await axios.post(`${API_URL}/personal-tasks/${taskId}/toggle-complete`, {}, { headers });
       message.success(isCompleted ? 'Tarea marcada como pendiente' : 'Tarea marcada como completada');
       
-      // Refresh the tasks and force re-render of tabs
+      // Actualizar las tareas y forzar la actualización de pestañas
       await fetchPersonalTasks();
       
-      // Optional: Switch to the appropriate tab when the task state changes
+      // Opcional: Cambiar a la pestaña apropiada cuando cambia el estado de la tarea
       const tabsRef = document.querySelector('.ant-tabs-nav-list');
       if (tabsRef) {
         const tabToClick = isCompleted ? 
-          tabsRef.querySelector('.ant-tabs-tab:first-child') :  // Switch to Pending tab
-          tabsRef.querySelector('.ant-tabs-tab:nth-child(2)');  // Switch to Completed tab
+          tabsRef.querySelector('.ant-tabs-tab:first-child') :  // Cambiar a la pestaña Pendientes
+          tabsRef.querySelector('.ant-tabs-tab:nth-child(2)');  // Cambiar a la pestaña Completadas
           
         if (tabToClick) {
           tabToClick.click();
@@ -164,6 +202,22 @@ const StudentDashboard = () => {
     }
   };
 
+  // Update personal task status
+  const handleUpdatePersonalTaskStatus = async (taskId, newStatus) => {
+    try {
+      await axios.put(`${API_URL}/personal-tasks/${taskId}`, 
+        { status: newStatus }, 
+        { headers }
+      );
+      
+      message.success('Estado actualizado correctamente');
+      fetchPersonalTasks();
+    } catch (error) {
+      console.error('Error updating personal task status:', error);
+      message.error('Error al actualizar el estado de la tarea');
+    }
+  };
+
   // Delete personal task
   const handleDeletePersonalTask = async (taskId) => {
     try {
@@ -173,46 +227,6 @@ const StudentDashboard = () => {
     } catch (error) {
       console.error('Error deleting personal task:', error);
       message.error('Error al eliminar la tarea personal');
-    }
-  };
-
-  // Update task status
-  const handleUpdateTaskStatus = async (taskId, newStatus) => {
-    try {
-      // For personal tasks
-      if (activeTab === 'personal') {
-        await axios.put(`${API_URL}/personal-tasks/${taskId}`, 
-          { status: newStatus }, 
-          { headers }
-        );
-        fetchPersonalTasks();
-      } 
-      // For group tasks
-      else {
-        await axios.put(`${API_URL}/tasks/${taskId}`, 
-          { status: newStatus }, 
-          { headers }
-        );
-        
-        // Update the selected task in state
-        if (selectedTask) {
-          setSelectedTask({
-            ...selectedTask,
-            status: newStatus
-          });
-        }
-        
-        // Refresh the group tasks
-        if (selectedGroup) {
-          fetchGroups();
-        }
-      }
-      
-      message.success('Estado actualizado correctamente');
-      setEditingTaskStatus(null); // Exit editing mode
-    } catch (error) {
-      console.error('Error updating task status:', error);
-      message.error('Error al actualizar el estado de la tarea');
     }
   };
 
@@ -248,6 +262,11 @@ const StudentDashboard = () => {
       case 'Revision': return 'red';
       default: return 'default';
     }
+  };
+
+  const getStatusLabel = (statusValue) => {
+    const status = taskStatuses.find(s => s.value === statusValue);
+    return status ? status.label : statusValue;
   };
 
   // Check if a task has been completed by the current user
@@ -290,6 +309,26 @@ const StudentDashboard = () => {
         grouped[category] = [];
       }
       grouped[category].push(task);
+    });
+    
+    return grouped;
+  };
+
+  // Agrupar tareas por estado
+  const groupTasksByStatus = (tasks) => {
+    const grouped = {};
+    
+    taskStatuses.forEach(status => {
+      grouped[status.value] = [];
+    });
+    
+    tasks.forEach(task => {
+      if (task.status && grouped[task.status]) {
+        grouped[task.status].push(task);
+      } else {
+        // Si el estado no está definido, asignar a "In Progress" por defecto
+        grouped['In Progress'].push(task);
+      }
     });
     
     return grouped;
@@ -358,7 +397,7 @@ const StudentDashboard = () => {
       >
         <Paragraph ellipsis={{ rows: 2 }}>{task.description}</Paragraph>
         <div style={{ marginTop: 12 }}>
-          <Tag color={getStatusColor(task.status)}>{task.status}</Tag>
+          <Tag color={getStatusColor(task.status)}>{getStatusLabel(task.status)}</Tag>
           <Tag color={isPastDue ? 'red' : 'blue'} icon={<ClockCircleOutlined />}>
             {deadlineDate.toLocaleString()}
           </Tag>
@@ -370,6 +409,7 @@ const StudentDashboard = () => {
   const GroupTasks = ({ groupId }) => {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [viewMode, setViewMode] = useState('category'); // 'category' o 'status'
 
     const fetchTasks = async () => {
       setLoading(true);
@@ -394,12 +434,24 @@ const StudentDashboard = () => {
     const pendingTasks = tasks.filter(task => !isTaskCompletedByMe(task));
     const completedTasks = tasks.filter(task => isTaskCompletedByMe(task));
     
-    // Agrupar tareas pendientes por categoría
+    // Agrupar tareas pendientes por categoría o estado
     const pendingByCategory = groupTasksByCategory(pendingTasks);
+    const pendingByStatus = groupTasksByStatus(pendingTasks);
     const completedByCategory = groupTasksByCategory(completedTasks);
 
     return (
       <div>
+        <div style={{ marginBottom: 16 }}>
+          <Radio.Group 
+            value={viewMode} 
+            onChange={(e) => setViewMode(e.target.value)}
+            buttonStyle="solid"
+          >
+            <Radio.Button value="category">Por Categoría</Radio.Button>
+            <Radio.Button value="status">Por Estado</Radio.Button>
+          </Radio.Group>
+        </div>
+
         <Tabs defaultActiveKey="pending">
           <TabPane 
             tab={
@@ -416,7 +468,8 @@ const StudentDashboard = () => {
                 description="No hay tareas pendientes" 
                 image={Empty.PRESENTED_IMAGE_SIMPLE} 
               />
-            ) : (
+            ) : viewMode === 'category' ? (
+              // Vista por categoría
               Object.entries(pendingByCategory).map(([category, categoryTasks]) => (
                 <div key={category} style={{ marginBottom: 20 }}>
                   <Divider orientation="left">
@@ -431,6 +484,27 @@ const StudentDashboard = () => {
                   </Row>
                 </div>
               ))
+            ) : (
+              // Vista por estado
+              Object.entries(pendingByStatus).map(([status, statusTasks]) => {
+                if (statusTasks.length === 0) return null;
+                return (
+                  <div key={status} style={{ marginBottom: 20 }}>
+                    <Divider orientation="left">
+                      <Tag color={getStatusColor(status)} style={{ fontSize: '16px', padding: '5px 10px' }}>
+                        {getStatusLabel(status)}
+                      </Tag>
+                    </Divider>
+                    <Row gutter={[16, 16]}>
+                      {statusTasks.map(task => (
+                        <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                          <TaskCard task={task} />
+                        </Col>
+                      ))}
+                    </Row>
+                  </div>
+                );
+              })
             )}
           </TabPane>
           <TabPane 
@@ -471,24 +545,28 @@ const StudentDashboard = () => {
   };
 
   const PersonalTasksList = () => {
+    const [viewMode, setViewMode] = useState('category'); // 'category' o 'status'
+    
     // Separate tasks into pending and completed
     const pendingTasks = personalTasks.filter(task => !task.completed);
     const completedTasks = personalTasks.filter(task => task.completed);
     
-    // Agrupar tareas por categoría
+    // Agrupar tareas pendientes por categoría o estado
     const pendingByCategory = groupTasksByCategory(pendingTasks);
+    const pendingByStatus = groupTasksByStatus(pendingTasks);
     const completedByCategory = groupTasksByCategory(completedTasks);
 
     return (
       <div>
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />} 
-            onClick={showCreatePersonalTaskModal}
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Radio.Group 
+            value={viewMode} 
+            onChange={(e) => setViewMode(e.target.value)}
+            buttonStyle="solid"
           >
-            Crear Nueva Tarea
-          </Button>
+            <Radio.Button value="category">Por Categoría</Radio.Button>
+            <Radio.Button value="status">Por Estado</Radio.Button>
+          </Radio.Group>
         </div>
 
         <Tabs defaultActiveKey="pending">
@@ -507,7 +585,8 @@ const StudentDashboard = () => {
                 description="No tienes tareas pendientes" 
                 image={Empty.PRESENTED_IMAGE_SIMPLE} 
               />
-            ) : (
+            ) : viewMode === 'category' ? (
+              // Vista por categoría
               Object.entries(pendingByCategory).map(([category, categoryTasks]) => (
                 <div key={category} style={{ marginBottom: 20 }}>
                   <Divider orientation="left">
@@ -522,6 +601,27 @@ const StudentDashboard = () => {
                   </Row>
                 </div>
               ))
+            ) : (
+              // Vista por estado
+              Object.entries(pendingByStatus).map(([status, statusTasks]) => {
+                if (statusTasks.length === 0) return null;
+                return (
+                  <div key={status} style={{ marginBottom: 20 }}>
+                    <Divider orientation="left">
+                      <Tag color={getStatusColor(status)} style={{ fontSize: '16px', padding: '5px 10px' }}>
+                        {getStatusLabel(status)}
+                      </Tag>
+                    </Divider>
+                    <Row gutter={[16, 16]}>
+                      {statusTasks.map(task => (
+                        <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                          <TaskCard task={task} isPersonal={true} />
+                        </Col>
+                      ))}
+                    </Row>
+                  </div>
+                );
+              })
             )}
           </TabPane>
           <TabPane 
@@ -629,7 +729,7 @@ const StudentDashboard = () => {
         open={taskModalVisible}
         onCancel={() => {
           setTaskModalVisible(false);
-          setEditingTaskStatus(null); // Reset when closing
+          setEditingTaskStatus(null);
         }}
         footer={[
           <Button key="back" onClick={() => setTaskModalVisible(false)}>
@@ -648,7 +748,7 @@ const StudentDashboard = () => {
               : 'Marcar como Completada'
             }
           </Button>,
-          // Add status change button if appropriate
+          // Añadir botón para cambiar el estado
           selectedTask && !isTaskCompletedByMe(selectedTask) && (
             <Button 
               key="changeStatus" 
@@ -658,6 +758,7 @@ const StudentDashboard = () => {
             </Button>
           )
         ]}
+        wrapClassName={theme === 'dark' ? 'dark-theme' : ''}
       >
         {selectedTask && (
           <div>
@@ -673,18 +774,19 @@ const StudentDashboard = () => {
                       value={editingTaskStatus}
                       onChange={(value) => {
                         setEditingTaskStatus(value);
-                        // Update task status in backend
                         handleUpdateTaskStatus(selectedTask._id, value);
                       }}
                       style={{ width: 150, marginLeft: 10 }}
+                      dropdownClassName={theme === 'dark' ? 'dark-theme' : ''}
                     >
-                      <Option value="In Progress">En Progreso</Option>
-                      <Option value="Done">Hecho</Option>
-                      <Option value="Paused">Pausado</Option>
-                      <Option value="Revision">Revisión</Option>
+                      {taskStatuses.map(status => (
+                        <Option key={status.value} value={status.value}>{status.label}</Option>
+                      ))}
                     </Select>
                   ) : (
-                    <Tag color={getStatusColor(selectedTask.status)}>{selectedTask.status}</Tag>
+                    <Tag color={getStatusColor(selectedTask.status)}>
+                      {getStatusLabel(selectedTask.status)}
+                    </Tag>
                   )}
                 </p>
                 <p><strong>Fecha Límite:</strong> {new Date(selectedTask.dead_line).toLocaleString()}</p>
@@ -699,101 +801,91 @@ const StudentDashboard = () => {
 
       {/* Modal para crear/editar tarea personal */}
       <Modal
-  title={editingPersonalTask ? "Editar Tarea Personal" : "Crear Tarea Personal"}
-  open={personalTaskModalVisible}
-  onCancel={() => {
-    setPersonalTaskModalVisible(false);
-    setEditingPersonalTask(null);
-    taskForm.resetFields();
-  }}
-  footer={null}
-  // No añadir className aquí para mantener el estilo normal del modal
->
-  <Form
-    form={taskForm}
-    layout="vertical"
-    onFinish={handleSavePersonalTask}
-  >
-    {/* Dejar los inputs normales */}
-    <Form.Item
-      name="name_task"
-      label="Nombre de la Tarea"
-      rules={[{ required: true, message: 'Por favor ingresa el nombre de la tarea' }]}
-    >
-      <Input placeholder="Nombre de la tarea" />
-    </Form.Item>
-    
-    <Form.Item
-      name="description"
-      label="Descripción"
-      rules={[{ required: true, message: 'Por favor ingresa una descripción' }]}
-    >
-      <TextArea rows={4} placeholder="Descripción de la tarea" />
-    </Form.Item>
-    
-    <Form.Item
-      name="dead_line"
-      label="Fecha de Vencimiento"
-      rules={[{ required: true, message: 'Por favor selecciona una fecha de vencimiento' }]}
-    >
-      <DatePicker 
-        showTime 
-        format="DD/MM/YYYY HH:mm" 
-        placeholder="Selecciona fecha y hora"
-        style={{ width: '100%' }}
-        // Solo aplicar al dropdown, no al componente principal
-        dropdownClassName={theme === 'dark' ? 'dark-theme' : ''}
-        popupClassName={theme === 'dark' ? 'dark-theme' : ''}
-      />
-    </Form.Item>
-    
-    <Form.Item
-      name="status"
-      label="Estado"
-      rules={[{ required: true, message: 'Por favor selecciona un estado' }]}
-    >
-<Select 
-  placeholder="Selecciona un estado"
-  dropdownClassName="ant-select-dropdown-dark"
-  className={theme === 'dark' ? 'ant-select-dark' : ''}
-  style={theme === 'dark' ? { 
-    backgroundColor: '#1f1f1f', 
-    color: 'white',
-    borderColor: '#303030'
-  } : {}}
->
-  <Option value="In Progress">En Progreso</Option>
-  <Option value="Paused">Pausada</Option>
-  <Option value="Revision">En Revisión</Option>
-  <Option value="Done">Completada</Option>
-</Select>
-    </Form.Item>
-    
-    <Form.Item
-      name="category"
-      label="Categoría"
-    >
-      <Input placeholder="Categoría de la tarea (opcional)" />
-    </Form.Item>
-    
-    <Form.Item>
-      <Space>
-        <Button type="primary" htmlType="submit">
-          {editingPersonalTask ? "Actualizar" : "Crear"}
-        </Button>
-        <Button 
-          onClick={() => {
-            setPersonalTaskModalVisible(false);
-            setEditingPersonalTask(null);
-            taskForm.resetFields();
-          }}
+        title={editingPersonalTask ? "Editar Tarea Personal" : "Crear Tarea Personal"}
+        open={personalTaskModalVisible}
+        onCancel={() => {
+          setPersonalTaskModalVisible(false);
+          setEditingPersonalTask(null);
+          taskForm.resetFields();
+        }}
+        footer={null}
+        wrapClassName={theme === 'dark' ? 'dark-theme' : ''}
+      >
+        <Form
+          form={taskForm}
+          layout="vertical"
+          onFinish={handleSavePersonalTask}
         >
-          Cancelar
-        </Button>
-      </Space>
-    </Form.Item>
-  </Form>
-</Modal>
+          <Form.Item
+            name="name_task"
+            label="Nombre de la Tarea"
+            rules={[{ required: true, message: 'Por favor ingresa el nombre de la tarea' }]}
+          >
+            <Input placeholder="Nombre de la tarea" />
+          </Form.Item>
+          
+          <Form.Item
+            name="description"
+            label="Descripción"
+            rules={[{ required: true, message: 'Por favor ingresa una descripción' }]}
+          >
+            <TextArea rows={4} placeholder="Descripción de la tarea" />
+          </Form.Item>
+          
+          <Form.Item
+            name="dead_line"
+            label="Fecha de Vencimiento"
+            rules={[{ required: true, message: 'Por favor selecciona una fecha de vencimiento' }]}
+          >
+            <DatePicker 
+              showTime 
+              format="DD/MM/YYYY HH:mm" 
+              placeholder="Selecciona fecha y hora"
+              style={{ width: '100%' }}
+              dropdownClassName={theme === 'dark' ? 'dark-theme' : ''}
+            />
+          </Form.Item>
+          
+          <Form.Item
+            name="status"
+            label="Estado"
+            rules={[{ required: true, message: 'Por favor selecciona un estado' }]}
+          >
+            <Select 
+              placeholder="Selecciona un estado"
+              dropdownClassName={theme === 'dark' ? 'dark-theme' : ''}
+            >
+              {taskStatuses.map(status => (
+                <Option key={status.value} value={status.value}>{status.label}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          
+          <Form.Item
+            name="category"
+            label="Categoría"
+          >
+            <Input placeholder="Categoría de la tarea (opcional)" />
+          </Form.Item>
+          
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                {editingPersonalTask ? "Actualizar" : "Crear"}
+              </Button>
+              <Button 
+                onClick={() => {
+                  setPersonalTaskModalVisible(false);
+                  setEditingPersonalTask(null);
+                  taskForm.resetFields();
+                }}
+              >
+                Cancelar
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
 
       {/* Modal de confirmación para cerrar sesión */}
       <Modal
@@ -807,19 +899,16 @@ const StudentDashboard = () => {
         <p>¿Estás seguro de que deseas cerrar la sesión?</p>
       </Modal>
       
-      {/* Floating action button */}
-      <FloatButton
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={() => {
-          if (activeTab === 'personal') {
-            showCreatePersonalTaskModal();
-          } else if (activeTab === 'groups' && selectedGroup) {
-            showCreatePersonalTaskModal();
-          }
-        }}
-        tooltip={activeTab === 'personal' ? 'Nueva tarea personal' : 'Nueva tarea'}
-      />
+      {/* Botón flotante (solo visible en la pestaña de tareas personales) */}
+      {activeTab === 'personal' && (
+        <FloatButton
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={showCreatePersonalTaskModal}
+          tooltip="Nueva tarea personal"
+          style={{ backgroundColor: '#6a11cb', borderColor: '#6a11cb' }}
+        />
+      )}
     </div>
   );
 };
