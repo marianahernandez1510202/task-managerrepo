@@ -116,45 +116,89 @@ const StudentDashboard = () => {
   };
 
   // Update task status - Versión corregida
-  const handleUpdateTaskStatus = async (taskId, newStatus) => {
-    try {
-      console.log("Actualizando estado de tarea:", taskId, "a", newStatus);
-      
-      // For group tasks
-      const response = await axios.put(`${API_URL}/tasks/${taskId}`, 
-        { status: newStatus }, 
-        { headers }
-      );
-      
-      console.log("Respuesta del servidor (actualización de estado):", response.data);
-      
-      if (response.data && response.data.task) {
-        // Update the selected task in state
-        setSelectedTask(response.data.task);
-        message.success('Estado actualizado correctamente');
-        
-        // Refresh the group tasks
-        if (selectedGroup) {
-          // Cerrar el modal de edición de estado
-          setEditingTaskStatus(null);
-          
-          // Refrescar todas las tareas del grupo
-          const groupIndex = groups.findIndex(g => g._id === selectedGroup);
-          if (groupIndex !== -1) {
-            const updatedGroups = [...groups];
-            
-            // Forzar una actualización completa desde el servidor
-            await fetchGroups();
-          }
-        }
-      } else {
-        message.error('No se pudo actualizar el estado de la tarea');
-      }
-    } catch (error) {
-      console.error('Error updating task status:', error);
-      message.error('Error al actualizar el estado de la tarea: ' + (error.response?.data?.message || error.message));
+ // Update task status - Versión mejorada con más logs y mejor manejo de errores
+const handleUpdateTaskStatus = async (taskId, newStatus) => {
+  try {
+    console.log(`Iniciando actualización de estatus para tarea ${taskId}`);
+    console.log(`Estatus anterior: ${selectedTask?.status}, Nuevo estatus: ${newStatus}`);
+    
+    // Mostrar mensaje de carga
+    const loadingMessage = message.loading('Actualizando estado...', 0);
+    
+    // Verificar que el token esté disponible
+    const token = localStorage.getItem('token');
+    if (!token) {
+      message.error('No se encontró token de autenticación');
+      return;
     }
-  };
+    
+    console.log(`URL de la petición: ${API_URL}/tasks/${taskId}`);
+    console.log(`Cuerpo de la petición:`, { status: newStatus });
+    console.log(`Headers:`, headers);
+    
+    // Realizar la petición al servidor
+    const response = await axios.put(
+      `${API_URL}/tasks/${taskId}`, 
+      { status: newStatus }, 
+      { headers }
+    );
+    
+    // Cerrar mensaje de carga
+    loadingMessage();
+    
+    console.log("Respuesta del servidor:", response);
+    console.log("Datos de la respuesta:", response.data);
+    
+    if (response.data && response.data.task) {
+      console.log("Tarea actualizada recibida del servidor:", response.data.task);
+      
+      // Actualizar la tarea seleccionada en el estado
+      setSelectedTask(response.data.task);
+      
+      // Cerrar el selector de estado
+      setEditingTaskStatus(null);
+      
+      // Mensaje de éxito
+      message.success(`Tarea actualizada a estado: ${getStatusLabel(newStatus)}`);
+      
+      // Refrescar las tareas del grupo
+      if (selectedGroup) {
+        console.log(`Refrescando tareas del grupo ${selectedGroup} después de la actualización`);
+        await fetchGroups();
+      }
+    } else {
+      console.warn("Respuesta sin datos de tarea:", response.data);
+      message.warning('La tarea se actualizó, pero no se recibieron datos actualizados');
+      
+      // Aún así, refrescamos los datos
+      if (selectedGroup) {
+        await fetchGroups();
+      }
+    }
+  } catch (error) {
+    console.error('Error al actualizar el estado de la tarea:', error);
+    
+    // Errores específicos de la respuesta
+    if (error.response) {
+      console.error('Respuesta de error del servidor:', error.response.data);
+      console.error('Estado HTTP:', error.response.status);
+      message.error(`Error (${error.response.status}): ${error.response.data.message || 'Error al actualizar'}`);
+    } 
+    // Errores de red o conexión
+    else if (error.request) {
+      console.error('No se recibió respuesta del servidor:', error.request);
+      message.error('No se pudo conectar con el servidor. Verifica tu conexión a internet.');
+    } 
+    // Otros errores
+    else {
+      console.error('Error en la configuración de la solicitud:', error.message);
+      message.error(`Error: ${error.message}`);
+    }
+    
+    // Restaurar el estado anterior
+    setEditingTaskStatus(selectedTask?.status || null);
+  }
+};
 
   // Toggle personal task completion
   const handleTogglePersonalTaskCompletion = async (taskId, isCompleted) => {
