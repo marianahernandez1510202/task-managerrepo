@@ -116,70 +116,106 @@ const StudentDashboard = () => {
   };
 
   // Update task status - Versión optimizada para garantizar la actualización
- // Corregir la función handleUpdateTaskStatus
-const handleUpdateTaskStatus = async (taskId, newStatus) => {
-  try {
-    // Mostrar mensaje de carga
-    message.loading({ 
-      content: `Actualizando estado a ${getStatusLabel(newStatus)}...`, 
-      key: 'statusUpdate', 
-      duration: 0 
-    });
-    
-    console.log(`Enviando actualización de estado para tarea ${taskId}`);
-    console.log(`Cuerpo de la petición:`, { status: newStatus });
-    
-    // Realizar la petición al servidor
-    const response = await axios.put(
-      `${API_URL}/tasks/${taskId}`, 
-      { status: newStatus }, 
-      { headers }
-    );
-    
-    if (response.status === 200) {
-      console.log("Actualización exitosa:", response.data);
+  const handleUpdateTaskStatus = async (taskId, newStatus) => {
+    try {
+      console.log(`Iniciando actualización de estatus para tarea ${taskId}`);
+      console.log(`Estatus anterior: ${selectedTask?.status}, Nuevo estatus: ${newStatus}`);
       
-      // Actualizar la tarea seleccionada en el estado
+      // Si el estado es el mismo, no hacemos nada
+      if (selectedTask?.status === newStatus) {
+        console.log('El estado seleccionado es el mismo que el actual, no se realizan cambios');
+        setEditingTaskStatus(null);
+        return;
+      }
+      
+      // Mostrar mensaje de carga
+      const loadingKey = 'updatingStatus';
+      message.loading({ content: 'Actualizando estado...', key: loadingKey, duration: 0 });
+      
+      // Verificar que el token esté disponible
+      const token = localStorage.getItem('token');
+      if (!token) {
+        message.error({ content: 'No se encontró token de autenticación', key: loadingKey });
+        return;
+      }
+      
+      console.log(`URL de la petición: ${API_URL}/tasks/${taskId}`);
+      console.log(`Cuerpo de la petición:`, { status: newStatus });
+      
+      // Realizar la petición al servidor
+      const response = await axios.put(
+        `${API_URL}/tasks/${taskId}`, 
+        { status: newStatus }, 
+        { headers }
+      );
+      
+      console.log("Respuesta del servidor:", response);
+      console.log("Datos de la respuesta:", response.data);
+      
       if (response.data && response.data.task) {
+        console.log("Tarea actualizada recibida del servidor:", response.data.task);
+        
+        // Actualizar la tarea seleccionada en el estado
         setSelectedTask({...response.data.task});
-      } else {
-        // Si no hay datos de tarea en la respuesta, actualizar manualmente
-        if (selectedTask) {
-          setSelectedTask(prev => ({
-            ...prev,
-            status: newStatus
-          }));
+        
+        // Cerrar el selector de estado
+        setEditingTaskStatus(null);
+        
+        // Mensaje de éxito
+        message.success({ content: `Tarea actualizada a estado: ${getStatusLabel(newStatus)}`, key: loadingKey });
+        
+        // Refrescar las tareas del grupo
+        if (selectedGroup) {
+          console.log(`Refrescando tareas del grupo ${selectedGroup} después de la actualización`);
+          await fetchGroups();
         }
+      } else {
+        console.warn("Respuesta sin datos de tarea:", response.data);
+        message.warning({ 
+          content: 'La tarea se actualizó, pero no se recibieron datos actualizados',
+          key: loadingKey
+        });
+        
+        // Aún así, actualizamos manualmente el estado de la tarea seleccionada
+        if (selectedTask) {
+          setSelectedTask({
+            ...selectedTask,
+            status: newStatus
+          });
+        }
+        
+        // Refrescar las tareas del grupo
+        if (selectedGroup) {
+          await fetchGroups();
+        }
+        
+        // Cerrar la edición
+        setEditingTaskStatus(null);
+      }
+    } catch (error) {
+      console.error('Error al actualizar el estado de la tarea:', error);
+      
+      // Errores específicos de la respuesta
+      if (error.response) {
+        console.error('Respuesta de error del servidor:', error.response.data);
+        console.error('Estado HTTP:', error.response.status);
+        message.error(`Error (${error.response.status}): ${error.response.data.message || 'Error al actualizar'}`);
+      } 
+      // Errores de red o conexión
+      else if (error.request) {
+        console.error('No se recibió respuesta del servidor:', error.request);
+        message.error('No se pudo conectar con el servidor. Verifica tu conexión a internet.');
+      } 
+      // Otros errores
+      else {
+        console.error('Error en la configuración de la solicitud:', error.message);
+        message.error(`Error: ${error.message}`);
       }
       
-      // Cerrar el selector de estado
-      setEditingTaskStatus(null);
-      
-      // Mensaje de éxito
-      message.success({ 
-        content: `Tarea actualizada a estado: ${getStatusLabel(newStatus)}`, 
-        key: 'statusUpdate' 
-      });
-      
-      // Refrescar las tareas del grupo
-      if (selectedGroup) {
-        fetchGroups();
-      }
-    } else {
-      throw new Error("La respuesta del servidor no fue exitosa");
+      // Restaurar el estado anterior
+      setEditingTaskStatus(selectedTask?.status || null);
     }
-  } catch (error) {
-    console.error('Error al actualizar el estado de la tarea:', error);
-    
-    // Mostrar mensaje de error
-    message.error({ 
-      content: 'Error al actualizar el estado de la tarea', 
-      key: 'statusUpdate' 
-    });
-    
-    // No cerrar el selector de estado para permitir otro intento
-  }
-};
+  };
 
   // Toggle personal task completion
   const handleTogglePersonalTaskCompletion = async (taskId, isCompleted) => {
@@ -222,72 +258,7 @@ const handleUpdateTaskStatus = async (taskId, newStatus) => {
       message.error('Error al guardar la tarea personal');
     }
   };
-// Función para que los estudiantes actualicen el estado de sus tareas
-const handleStudentUpdateTaskStatus = async (taskId, newStatus) => {
-  try {
-    // Mostrar mensaje de carga
-    const loadingKey = 'updatingStatus';
-    message.loading({ content: 'Actualizando estado...', key: loadingKey, duration: 0 });
-    
-    console.log(`Enviando actualización de estado para tarea ${taskId}`);
-    console.log(`Cuerpo de la petición:`, { status: newStatus });
-    
-    // Usar la nueva ruta específica para estudiantes
-    const response = await axios.post(
-      `${API_URL}/tasks/${taskId}/updateStatus`, 
-      { status: newStatus }, 
-      { headers }
-    );
-    
-    console.log("Respuesta del servidor:", response);
-    
-    if (response.status === 200 && response.data) {
-      // Actualizar la tarea seleccionada en el estado
-      if (response.data.task) {
-        setSelectedTask({...response.data.task});
-      } else {
-        // Si no hay datos de tarea en la respuesta, actualizar manualmente
-        if (selectedTask) {
-          setSelectedTask(prev => ({
-            ...prev,
-            status: newStatus
-          }));
-        }
-      }
-      
-      // Cerrar el selector de estado
-      setEditingTaskStatus(null);
-      
-      // Mensaje de éxito
-      message.success({ 
-        content: `Tarea actualizada a estado: ${getStatusLabel(newStatus)}`, 
-        key: loadingKey 
-      });
-      
-      // Refrescar las tareas
-      if (selectedGroup) {
-        fetchGroups();
-      }
-    } else {
-      throw new Error("La respuesta del servidor no fue exitosa");
-    }
-  } catch (error) {
-    console.error('Error al actualizar el estado de la tarea:', error);
-    
-    // Mostrar mensaje de error más específico
-    if (error.response) {
-      message.error({ 
-        content: `Error: ${error.response.data.message || 'No se pudo actualizar el estado'}`, 
-        key: 'updatingStatus' 
-      });
-    } else {
-      message.error({ 
-        content: 'Error al conectar con el servidor. Intenta nuevamente más tarde.', 
-        key: 'updatingStatus' 
-      });
-    }
-  }
-};
+
   // Update personal task status
   const handleUpdatePersonalTaskStatus = async (taskId, newStatus) => {
     try {
@@ -1129,62 +1100,52 @@ const handleStudentUpdateTaskStatus = async (taskId, newStatus) => {
             
             <Collapse defaultActiveKey={['1']}>
               <Panel header="Información de la Tarea" key="1">
-               {/* En el modal de detalles de tarea, reemplaza la sección del estado con este código */}
-{/* Dentro del modal de detalles de tarea */}
-<p>
-  <strong>Estado:</strong> 
-  {editingTaskStatus ? (
-    <div style={{ marginTop: 8 }}>
-      <Select 
-        value={editingTaskStatus}
-        onChange={(value) => setEditingTaskStatus(value)}
-        style={{ width: 200 }}
-      >
-        {taskStatuses.map(status => (
-          <Option key={status.value} value={status.value}>
-            {status.label}
-          </Option>
-        ))}
-      </Select>
-      <Button 
-        type="primary"
-        size="small" 
-        style={{ marginLeft: 8 }}
-        onClick={() => {
-          if (editingTaskStatus && editingTaskStatus !== selectedTask.status) {
-            // Usar la nueva función específica para estudiantes
-            handleStudentUpdateTaskStatus(selectedTask._id, editingTaskStatus);
-          } else {
-            setEditingTaskStatus(null);
-          }
-        }}
-      >
-        Aplicar
-      </Button>
-      <Button 
-        size="small" 
-        style={{ marginLeft: 8 }}
-        onClick={() => setEditingTaskStatus(null)}
-      >
-        Cancelar
-      </Button>
-    </div>
-  ) : (
-    <div style={{ display: 'flex', alignItems: 'center' }}>
-      <Tag color={getStatusColor(selectedTask.status)}>
-        {getStatusLabel(selectedTask.status)}
-      </Tag>
-      <Button 
-        type="link" 
-        size="small" 
-        onClick={() => setEditingTaskStatus(selectedTask.status)}
-        style={{ marginLeft: 8 }}
-      >
-        Cambiar
-      </Button>
-    </div>
-  )}
-</p>
+                <p>
+                  <strong>Estado:</strong> 
+                  {editingTaskStatus ? (
+                    <div style={{ marginTop: 8 }}>
+                      <Select 
+                        value={editingTaskStatus}
+                        onChange={(value) => {
+                          console.log("Cambiando estado a:", value);
+                          // Aplicar inmediatamente el cambio de estado
+                          handleUpdateTaskStatus(selectedTask._id, value);
+                        }}
+                        style={{ width: 200 }}
+                        dropdownClassName={theme === 'dark' ? 'dark-theme' : ''}
+                      >
+                        {taskStatuses.map(status => (
+                          <Option key={status.value} value={status.value}>
+                            <Tag color={getStatusColor(status.value)} style={{ marginRight: 8 }}>
+                              {status.label}
+                            </Tag>
+                          </Option>
+                        ))}
+                      </Select>
+                      <Button 
+                        size="small" 
+                        style={{ marginLeft: 8 }}
+                        onClick={() => setEditingTaskStatus(null)}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <Tag color={getStatusColor(selectedTask.status)}>
+                        {getStatusLabel(selectedTask.status)}
+                      </Tag>
+                      <Button 
+                        type="link" 
+                        size="small" 
+                        onClick={() => setEditingTaskStatus(selectedTask.status)}
+                        style={{ marginLeft: 8 }}
+                      >
+                        Cambiar
+                      </Button>
+                    </div>
+                  )}
+                </p>
                 <p><strong>Fecha Límite:</strong> {new Date(selectedTask.dead_line).toLocaleString()}</p>
                 {selectedTask.category && (
                   <p><strong>Categoría:</strong> {selectedTask.category}</p>
