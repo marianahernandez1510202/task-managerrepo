@@ -1,4 +1,4 @@
-// StudentDashboard.jsx - Componente actualizado con tareas por estado
+// StudentDashboard.jsx - Componente actualizado con tareas por sección y columnas
 import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from "react-router-dom";
 import { ThemeContext } from '../../context/ThemeContext'; // Ajusta la ruta según tu estructura
@@ -88,71 +88,58 @@ const StudentDashboard = () => {
     fetchPersonalTasks();
   }, []);
 
-  // Toggle task completion status (for group tasks) - Versión corregida
+  // Toggle task completion status (for group tasks)
   const handleToggleTaskCompletion = async (taskId, isCompleted) => {
     try {
-      console.log("Marcando tarea como completada: ", taskId, isCompleted);
-      
       const response = await axios.post(`${API_URL}/tasks/${taskId}/complete`, {}, { headers });
       
-      // Verificar la respuesta
-      console.log("Respuesta del servidor:", response.data);
-      
-      if (response.data) {
-        // Actualizar todas las tareas
-        await fetchGroups();
-        
-        // Cerrar el modal
-        setTaskModalVisible(false);
+      // Verificar si la respuesta contiene la tarea actualizada
+      if (response.data && response.data.task) {
+        // Actualizar la tarea seleccionada inmediatamente
+        setSelectedTask(response.data.task);
         
         message.success(isCompleted ? 'Tarea marcada como pendiente' : 'Tarea marcada como completada');
+        
+        // Cerrar el modal después de actualizar
+        setTaskModalVisible(false);
+        
+        // Actualizar las tareas del grupo para reflejar el cambio
+        if (selectedGroup) {
+          fetchGroups();
+        }
       } else {
         message.error('No se pudo actualizar el estado de la tarea');
       }
     } catch (error) {
-      console.error('Error al marcar la tarea como completada:', error);
+      console.error('Error toggling task completion:', error);
       message.error('Error al cambiar el estado de la tarea: ' + (error.response?.data?.message || error.message));
     }
   };
 
-  // Update task status - Versión corregida
+  // Update task status
   const handleUpdateTaskStatus = async (taskId, newStatus) => {
     try {
-      console.log("Actualizando estado de tarea:", taskId, "a", newStatus);
-      
       // For group tasks
       const response = await axios.put(`${API_URL}/tasks/${taskId}`, 
         { status: newStatus }, 
         { headers }
       );
       
-      console.log("Respuesta del servidor (actualización de estado):", response.data);
-      
       if (response.data && response.data.task) {
         // Update the selected task in state
         setSelectedTask(response.data.task);
-        message.success('Estado actualizado correctamente');
-        
-        // Refresh the group tasks
-        if (selectedGroup) {
-          // Cerrar el modal de edición de estado
-          setEditingTaskStatus(null);
-          
-          // Refrescar todas las tareas del grupo
-          const groupIndex = groups.findIndex(g => g._id === selectedGroup);
-          if (groupIndex !== -1) {
-            const updatedGroups = [...groups];
-            
-            // Forzar una actualización completa desde el servidor
-            await fetchGroups();
-          }
-        }
-      } else {
-        message.error('No se pudo actualizar el estado de la tarea');
+      }
+      
+      message.success('Estado actualizado correctamente');
+      setEditingTaskStatus(null); // Exit editing mode
+      
+      // Refresh the group tasks
+      if (selectedGroup) {
+        fetchGroups();
       }
     } catch (error) {
       console.error('Error updating task status:', error);
-      message.error('Error al actualizar el estado de la tarea: ' + (error.response?.data?.message || error.message));
+      message.error('Error al actualizar el estado de la tarea');
     }
   };
 
@@ -407,14 +394,12 @@ const StudentDashboard = () => {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(false);
     const [viewMode, setViewMode] = useState('status'); // 'category' o 'status' por defecto status
-    const [activeTabKey, setActiveTabKey] = useState('in_progress');
+    const [activeTabKey, setActiveTabKey] = useState('pending');
 
     const fetchTasks = async () => {
       setLoading(true);
       try {
-        console.log("Obteniendo tareas del grupo:", groupId);
         const response = await axios.get(`${API_URL}/groups/${groupId}/tasks`, { headers });
-        console.log("Tareas del grupo recibidas:", response.data);
         setTasks(response.data);
       } catch (error) {
         console.error('Error fetching tasks:', error);
@@ -430,19 +415,14 @@ const StudentDashboard = () => {
       }
     }, [groupId]);
 
-    // Agregar efecto para refrescar tareas cuando se cierre el modal
-    useEffect(() => {
-      if (!taskModalVisible && groupId) {
-        fetchTasks();
-      }
-    }, [taskModalVisible, groupId]);
-
     // Filtrar tareas completadas y pendientes
     const pendingTasks = tasks.filter(task => !isTaskCompletedByMe(task));
     const completedTasks = tasks.filter(task => isTaskCompletedByMe(task));
     
-    // Agrupar tareas por estado
+    // Agrupar tareas por categoría o estado
+    const pendingByCategory = groupTasksByCategory(pendingTasks);
     const pendingByStatus = groupTasksByStatus(pendingTasks);
+    const completedByCategory = groupTasksByCategory(completedTasks);
 
     return (
       <div>
@@ -459,144 +439,97 @@ const StudentDashboard = () => {
           />
         </div>
 
-        {/* Modificar la parte de los Tabs para mostrar una pestaña por cada estado */}
         <Tabs 
           activeKey={activeTabKey}
           onChange={setActiveTabKey} 
-          defaultActiveKey="in_progress"
+          defaultActiveKey="pending"
         >
-          {/* Pestaña para tareas En Progreso */}
           <TabPane 
             tab={
               <span>
-                En Progreso <Badge count={pendingByStatus['In Progress'].length} style={{ backgroundColor: '#1890ff' }} />
+                Pendientes <Badge count={pendingTasks.length} style={{ backgroundColor: '#1890ff' }} />
               </span>
             } 
-            key="in_progress"
+            key="pending"
           >
             {loading ? (
               <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
-            ) : pendingByStatus['In Progress'].length === 0 ? (
+            ) : pendingTasks.length === 0 ? (
               <Empty 
-                description="No hay tareas en progreso" 
+                description="No hay tareas pendientes" 
                 image={Empty.PRESENTED_IMAGE_SIMPLE} 
               />
+            ) : viewMode === 'category' ? (
+              // Vista por categoría
+              Object.entries(pendingByCategory).map(([category, categoryTasks]) => (
+                <div key={category} style={{ marginBottom: 20 }}>
+                  <Divider orientation="left">
+                    <Tag color="cyan" style={{ fontSize: '16px', padding: '5px 10px' }}>{category}</Tag>
+                  </Divider>
+                  <Row gutter={[16, 16]}>
+                    {categoryTasks.map(task => (
+                      <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                        <TaskCard task={task} />
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              ))
             ) : (
-              <Row gutter={[16, 16]}>
-                {pendingByStatus['In Progress'].map(task => (
-                  <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
-                    <TaskCard task={task} />
-                  </Col>
-                ))}
-              </Row>
+              // Vista por estado
+              taskStatuses.map(status => {
+                const statusTasks = pendingByStatus[status.value] || [];
+                if (statusTasks.length === 0) return null;
+                
+                return (
+                  <div key={status.value} style={{ marginBottom: 20 }}>
+                    <Divider orientation="left">
+                      <Tag color={getStatusColor(status.value)} style={{ fontSize: '16px', padding: '5px 10px' }}>
+                        {status.label}
+                      </Tag>
+                    </Divider>
+                    <Row gutter={[16, 16]}>
+                      {statusTasks.map(task => (
+                        <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                          <TaskCard task={task} />
+                        </Col>
+                      ))}
+                    </Row>
+                  </div>
+                );
+              })
             )}
           </TabPane>
-
-          {/* Pestaña para tareas En Revisión */}
           <TabPane 
             tab={
               <span>
-                En Revisión <Badge count={pendingByStatus['Revision'].length} style={{ backgroundColor: '#f50' }} />
-              </span>
-            } 
-            key="revision"
-          >
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
-            ) : pendingByStatus['Revision'].length === 0 ? (
-              <Empty 
-                description="No hay tareas en revisión" 
-                image={Empty.PRESENTED_IMAGE_SIMPLE} 
-              />
-            ) : (
-              <Row gutter={[16, 16]}>
-                {pendingByStatus['Revision'].map(task => (
-                  <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
-                    <TaskCard task={task} />
-                  </Col>
-                ))}
-              </Row>
-            )}
-          </TabPane>
-
-          {/* Pestaña para tareas Pausadas */}
-          <TabPane 
-            tab={
-              <span>
-                Pausadas <Badge count={pendingByStatus['Paused'].length} style={{ backgroundColor: '#fa8c16' }} />
-              </span>
-            } 
-            key="paused"
-          >
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
-            ) : pendingByStatus['Paused'].length === 0 ? (
-              <Empty 
-                description="No hay tareas pausadas" 
-                image={Empty.PRESENTED_IMAGE_SIMPLE} 
-              />
-            ) : (
-              <Row gutter={[16, 16]}>
-                {pendingByStatus['Paused'].map(task => (
-                  <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
-                    <TaskCard task={task} />
-                  </Col>
-                ))}
-              </Row>
-            )}
-          </TabPane>
-
-          {/* Pestaña para tareas Completadas/Hechas */}
-          <TabPane 
-            tab={
-              <span>
-                Completadas <Badge count={pendingByStatus['Done'].length + completedTasks.length} style={{ backgroundColor: '#52c41a' }} />
+                Completadas <Badge count={completedTasks.length} style={{ backgroundColor: '#52c41a' }} />
               </span>
             } 
             key="completed"
           >
             {loading ? (
               <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
-            ) : (pendingByStatus['Done'].length === 0 && completedTasks.length === 0) ? (
+            ) : completedTasks.length === 0 ? (
               <Empty 
                 description="No hay tareas completadas" 
                 image={Empty.PRESENTED_IMAGE_SIMPLE} 
               />
             ) : (
-              <div>
-                {pendingByStatus['Done'].length > 0 && (
-                  <div style={{ marginBottom: 20 }}>
-                    <Divider orientation="left">
-                      <Tag color={getStatusColor('Done')} style={{ fontSize: '16px', padding: '5px 10px' }}>
-                        {getStatusLabel('Done')}
-                      </Tag>
-                    </Divider>
-                    <Row gutter={[16, 16]}>
-                      {pendingByStatus['Done'].map(task => (
-                        <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
-                          <TaskCard task={task} />
-                        </Col>
-                      ))}
-                    </Row>
-                  </div>
-                )}
-                {completedTasks.length > 0 && (
-                  <div>
-                    <Divider orientation="left">
-                      <Tag color="green" style={{ fontSize: '16px', padding: '5px 10px' }}>
-                        Marcadas como Completadas
-                      </Tag>
-                    </Divider>
-                    <Row gutter={[16, 16]}>
-                      {completedTasks.map(task => (
-                        <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
-                          <TaskCard task={task} />
-                        </Col>
-                      ))}
-                    </Row>
-                  </div>
-                )}
-              </div>
+              Object.entries(completedByCategory).map(([category, categoryTasks]) => (
+                <div key={category} style={{ marginBottom: 20 }}>
+                  <Divider orientation="left">
+                    <Tag color="cyan" style={{ fontSize: '16px', padding: '5px 10px' }}>{category}</Tag>
+                  </Divider>
+                  <Row gutter={[16, 16]}>
+                    {categoryTasks.map(task => (
+                      <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                        <TaskCard task={task} />
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              ))
             )}
           </TabPane>
         </Tabs>
@@ -606,14 +539,16 @@ const StudentDashboard = () => {
 
   const PersonalTasksList = () => {
     const [viewMode, setViewMode] = useState('status'); // 'category' o 'status' por defecto status
-    const [activeTabKey, setActiveTabKey] = useState('in_progress');
+    const [activeTabKey, setActiveTabKey] = useState('pending');
     
     // Filtrar tareas completadas y pendientes
     const pendingTasks = personalTasks.filter(task => !task.completed);
     const completedTasks = personalTasks.filter(task => task.completed);
     
-    // Agrupar tareas por estado
+    // Agrupar tareas por categoría o estado
+    const pendingByCategory = groupTasksByCategory(pendingTasks);
     const pendingByStatus = groupTasksByStatus(pendingTasks);
+    const completedByCategory = groupTasksByCategory(completedTasks);
 
     return (
       <div>
@@ -630,144 +565,97 @@ const StudentDashboard = () => {
           />
         </div>
 
-        {/* Tabs para tareas personales, organizadas por estado */}
         <Tabs 
           activeKey={activeTabKey}
           onChange={setActiveTabKey}
-          defaultActiveKey="in_progress"
+          defaultActiveKey="pending"
         >
-          {/* Pestaña para tareas En Progreso */}
           <TabPane 
             tab={
               <span>
-                En Progreso <Badge count={pendingByStatus['In Progress'].length} style={{ backgroundColor: '#1890ff' }} />
+                Pendientes <Badge count={pendingTasks.length} style={{ backgroundColor: '#1890ff' }} />
               </span>
             } 
-            key="in_progress"
+            key="pending"
           >
             {personalTasksLoading ? (
               <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
-            ) : pendingByStatus['In Progress'].length === 0 ? (
+            ) : pendingTasks.length === 0 ? (
               <Empty 
-                description="No hay tareas en progreso" 
+                description="No tienes tareas pendientes" 
                 image={Empty.PRESENTED_IMAGE_SIMPLE} 
               />
+            ) : viewMode === 'category' ? (
+              // Vista por categoría
+              Object.entries(pendingByCategory).map(([category, categoryTasks]) => (
+                <div key={category} style={{ marginBottom: 20 }}>
+                  <Divider orientation="left">
+                    <Tag color="purple" style={{ fontSize: '16px', padding: '5px 10px' }}>{category}</Tag>
+                  </Divider>
+                  <Row gutter={[16, 16]}>
+                    {categoryTasks.map(task => (
+                      <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                        <TaskCard task={task} isPersonal={true} />
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              ))
             ) : (
-              <Row gutter={[16, 16]}>
-                {pendingByStatus['In Progress'].map(task => (
-                  <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
-                    <TaskCard task={task} isPersonal={true} />
-                  </Col>
-                ))}
-              </Row>
+              // Vista por estado
+              taskStatuses.map(status => {
+                const statusTasks = pendingByStatus[status.value] || [];
+                if (statusTasks.length === 0) return null;
+                
+                return (
+                  <div key={status.value} style={{ marginBottom: 20 }}>
+                    <Divider orientation="left">
+                      <Tag color={getStatusColor(status.value)} style={{ fontSize: '16px', padding: '5px 10px' }}>
+                        {status.label}
+                      </Tag>
+                    </Divider>
+                    <Row gutter={[16, 16]}>
+                      {statusTasks.map(task => (
+                        <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                          <TaskCard task={task} isPersonal={true} />
+                        </Col>
+                      ))}
+                    </Row>
+                  </div>
+                );
+              })
             )}
           </TabPane>
-
-          {/* Pestaña para tareas En Revisión */}
           <TabPane 
             tab={
               <span>
-                En Revisión <Badge count={pendingByStatus['Revision'].length} style={{ backgroundColor: '#f50' }} />
-              </span>
-            } 
-            key="revision"
-          >
-            {personalTasksLoading ? (
-              <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
-            ) : pendingByStatus['Revision'].length === 0 ? (
-              <Empty 
-                description="No hay tareas en revisión" 
-                image={Empty.PRESENTED_IMAGE_SIMPLE} 
-              />
-            ) : (
-              <Row gutter={[16, 16]}>
-                {pendingByStatus['Revision'].map(task => (
-                  <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
-                    <TaskCard task={task} isPersonal={true} />
-                  </Col>
-                ))}
-              </Row>
-            )}
-          </TabPane>
-
-          {/* Pestaña para tareas Pausadas */}
-          <TabPane 
-            tab={
-              <span>
-                Pausadas <Badge count={pendingByStatus['Paused'].length} style={{ backgroundColor: '#fa8c16' }} />
-              </span>
-            } 
-            key="paused"
-          >
-            {personalTasksLoading ? (
-              <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
-            ) : pendingByStatus['Paused'].length === 0 ? (
-              <Empty 
-                description="No hay tareas pausadas" 
-                image={Empty.PRESENTED_IMAGE_SIMPLE} 
-              />
-            ) : (
-              <Row gutter={[16, 16]}>
-                {pendingByStatus['Paused'].map(task => (
-                  <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
-                    <TaskCard task={task} isPersonal={true} />
-                  </Col>
-                ))}
-              </Row>
-            )}
-          </TabPane>
-
-          {/* Pestaña para tareas Completadas/Hechas */}
-          <TabPane 
-            tab={
-              <span>
-                Completadas <Badge count={pendingByStatus['Done'].length + completedTasks.length} style={{ backgroundColor: '#52c41a' }} />
+                Completadas <Badge count={completedTasks.length} style={{ backgroundColor: '#52c41a' }} />
               </span>
             } 
             key="completed"
           >
             {personalTasksLoading ? (
               <div style={{ textAlign: 'center', padding: '20px' }}>Cargando tareas...</div>
-            ) : (pendingByStatus['Done'].length === 0 && completedTasks.length === 0) ? (
+            ) : completedTasks.length === 0 ? (
               <Empty 
-                description="No hay tareas completadas" 
+                description="No tienes tareas completadas" 
                 image={Empty.PRESENTED_IMAGE_SIMPLE} 
               />
             ) : (
-              <div>
-                {pendingByStatus['Done'].length > 0 && (
-                  <div style={{ marginBottom: 20 }}>
-                    <Divider orientation="left">
-                      <Tag color={getStatusColor('Done')} style={{ fontSize: '16px', padding: '5px 10px' }}>
-                        {getStatusLabel('Done')}
-                      </Tag>
-                    </Divider>
-                    <Row gutter={[16, 16]}>
-                      {pendingByStatus['Done'].map(task => (
-                        <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
-                          <TaskCard task={task} isPersonal={true} />
-                        </Col>
-                      ))}
-                    </Row>
-                  </div>
-                )}
-                {completedTasks.length > 0 && (
-                  <div>
-                    <Divider orientation="left">
-                      <Tag color="green" style={{ fontSize: '16px', padding: '5px 10px' }}>
-                        Marcadas como Completadas
-                      </Tag>
-                    </Divider>
-                    <Row gutter={[16, 16]}>
-                      {completedTasks.map(task => (
-                        <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
-                          <TaskCard task={task} isPersonal={true} />
-                        </Col>
-                      ))}
-                    </Row>
-                  </div>
-                )}
-              </div>
+              Object.entries(completedByCategory).map(([category, categoryTasks]) => (
+                <div key={category} style={{ marginBottom: 20 }}>
+                  <Divider orientation="left">
+                    <Tag color="purple" style={{ fontSize: '16px', padding: '5px 10px' }}>{category}</Tag>
+                  </Divider>
+                  <Row gutter={[16, 16]}>
+                    {categoryTasks.map(task => (
+                      <Col xs={24} sm={12} md={8} lg={8} xl={6} key={task._id}>
+                        <TaskCard task={task} isPersonal={true} />
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              ))
             )}
           </TabPane>
         </Tabs>
@@ -860,8 +748,16 @@ const StudentDashboard = () => {
               ? 'Marcar como Pendiente' 
               : 'Marcar como Completada'
             }
-          </Button>
-          // El botón para cambiar estado se ha movido a cada línea de información
+          </Button>,
+          // Añadir botón para cambiar el estado
+          selectedTask && !isTaskCompletedByMe(selectedTask) && (
+            <Button 
+              key="changeStatus" 
+              onClick={() => setEditingTaskStatus(selectedTask.status)}
+            >
+              Cambiar Estado
+            </Button>
+          )
         ]}
         wrapClassName={theme === 'dark' ? 'dark-theme' : ''}
       >
@@ -889,19 +785,9 @@ const StudentDashboard = () => {
                       ))}
                     </Select>
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <Tag color={getStatusColor(selectedTask.status)}>
-                        {getStatusLabel(selectedTask.status)}
-                      </Tag>
-                      <Button 
-                        type="link" 
-                        size="small" 
-                        onClick={() => setEditingTaskStatus(selectedTask.status)}
-                        style={{ marginLeft: 8 }}
-                      >
-                        Cambiar
-                      </Button>
-                    </div>
+                    <Tag color={getStatusColor(selectedTask.status)}>
+                      {getStatusLabel(selectedTask.status)}
+                    </Tag>
                   )}
                 </p>
                 <p><strong>Fecha Límite:</strong> {new Date(selectedTask.dead_line).toLocaleString()}</p>
