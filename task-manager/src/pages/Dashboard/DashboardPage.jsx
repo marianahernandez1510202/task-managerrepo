@@ -116,106 +116,70 @@ const StudentDashboard = () => {
   };
 
   // Update task status - Versión optimizada para garantizar la actualización
-  const handleUpdateTaskStatus = async (taskId, newStatus) => {
-    try {
-      console.log(`Iniciando actualización de estatus para tarea ${taskId}`);
-      console.log(`Estatus anterior: ${selectedTask?.status}, Nuevo estatus: ${newStatus}`);
+ // Corregir la función handleUpdateTaskStatus
+const handleUpdateTaskStatus = async (taskId, newStatus) => {
+  try {
+    // Mostrar mensaje de carga
+    message.loading({ 
+      content: `Actualizando estado a ${getStatusLabel(newStatus)}...`, 
+      key: 'statusUpdate', 
+      duration: 0 
+    });
+    
+    console.log(`Enviando actualización de estado para tarea ${taskId}`);
+    console.log(`Cuerpo de la petición:`, { status: newStatus });
+    
+    // Realizar la petición al servidor
+    const response = await axios.put(
+      `${API_URL}/tasks/${taskId}`, 
+      { status: newStatus }, 
+      { headers }
+    );
+    
+    if (response.status === 200) {
+      console.log("Actualización exitosa:", response.data);
       
-      // Si el estado es el mismo, no hacemos nada
-      if (selectedTask?.status === newStatus) {
-        console.log('El estado seleccionado es el mismo que el actual, no se realizan cambios');
-        setEditingTaskStatus(null);
-        return;
-      }
-      
-      // Mostrar mensaje de carga
-      const loadingKey = 'updatingStatus';
-      message.loading({ content: 'Actualizando estado...', key: loadingKey, duration: 0 });
-      
-      // Verificar que el token esté disponible
-      const token = localStorage.getItem('token');
-      if (!token) {
-        message.error({ content: 'No se encontró token de autenticación', key: loadingKey });
-        return;
-      }
-      
-      console.log(`URL de la petición: ${API_URL}/tasks/${taskId}`);
-      console.log(`Cuerpo de la petición:`, { status: newStatus });
-      
-      // Realizar la petición al servidor
-      const response = await axios.put(
-        `${API_URL}/tasks/${taskId}`, 
-        { status: newStatus }, 
-        { headers }
-      );
-      
-      console.log("Respuesta del servidor:", response);
-      console.log("Datos de la respuesta:", response.data);
-      
+      // Actualizar la tarea seleccionada en el estado
       if (response.data && response.data.task) {
-        console.log("Tarea actualizada recibida del servidor:", response.data.task);
-        
-        // Actualizar la tarea seleccionada en el estado
         setSelectedTask({...response.data.task});
-        
-        // Cerrar el selector de estado
-        setEditingTaskStatus(null);
-        
-        // Mensaje de éxito
-        message.success({ content: `Tarea actualizada a estado: ${getStatusLabel(newStatus)}`, key: loadingKey });
-        
-        // Refrescar las tareas del grupo
-        if (selectedGroup) {
-          console.log(`Refrescando tareas del grupo ${selectedGroup} después de la actualización`);
-          await fetchGroups();
-        }
       } else {
-        console.warn("Respuesta sin datos de tarea:", response.data);
-        message.warning({ 
-          content: 'La tarea se actualizó, pero no se recibieron datos actualizados',
-          key: loadingKey
-        });
-        
-        // Aún así, actualizamos manualmente el estado de la tarea seleccionada
+        // Si no hay datos de tarea en la respuesta, actualizar manualmente
         if (selectedTask) {
-          setSelectedTask({
-            ...selectedTask,
+          setSelectedTask(prev => ({
+            ...prev,
             status: newStatus
-          });
+          }));
         }
-        
-        // Refrescar las tareas del grupo
-        if (selectedGroup) {
-          await fetchGroups();
-        }
-        
-        // Cerrar la edición
-        setEditingTaskStatus(null);
-      }
-    } catch (error) {
-      console.error('Error al actualizar el estado de la tarea:', error);
-      
-      // Errores específicos de la respuesta
-      if (error.response) {
-        console.error('Respuesta de error del servidor:', error.response.data);
-        console.error('Estado HTTP:', error.response.status);
-        message.error(`Error (${error.response.status}): ${error.response.data.message || 'Error al actualizar'}`);
-      } 
-      // Errores de red o conexión
-      else if (error.request) {
-        console.error('No se recibió respuesta del servidor:', error.request);
-        message.error('No se pudo conectar con el servidor. Verifica tu conexión a internet.');
-      } 
-      // Otros errores
-      else {
-        console.error('Error en la configuración de la solicitud:', error.message);
-        message.error(`Error: ${error.message}`);
       }
       
-      // Restaurar el estado anterior
-      setEditingTaskStatus(selectedTask?.status || null);
+      // Cerrar el selector de estado
+      setEditingTaskStatus(null);
+      
+      // Mensaje de éxito
+      message.success({ 
+        content: `Tarea actualizada a estado: ${getStatusLabel(newStatus)}`, 
+        key: 'statusUpdate' 
+      });
+      
+      // Refrescar las tareas del grupo
+      if (selectedGroup) {
+        fetchGroups();
+      }
+    } else {
+      throw new Error("La respuesta del servidor no fue exitosa");
     }
-  };
+  } catch (error) {
+    console.error('Error al actualizar el estado de la tarea:', error);
+    
+    // Mostrar mensaje de error
+    message.error({ 
+      content: 'Error al actualizar el estado de la tarea', 
+      key: 'statusUpdate' 
+    });
+    
+    // No cerrar el selector de estado para permitir otro intento
+  }
+};
 
   // Toggle personal task completion
   const handleTogglePersonalTaskCompletion = async (taskId, isCompleted) => {
@@ -442,19 +406,26 @@ const StudentDashboard = () => {
         actions={
           isPersonal ? [
             <Button 
-              icon={<EditOutlined />}
-              onClick={() => showEditPersonalTaskModal(task)}
-              size="small"
-            >
-              Editar
-            </Button>,
-            <Button 
-              type="primary"
-              onClick={handleStatusChange}
-              size="small"
-            >
-              Cambiar Estado
-            </Button>,
+  type="default"
+  onClick={() => {
+    setSelectedTask(task);
+    setTaskModalVisible(true);
+    // Dar tiempo para que el modal se abra y se actualice selectedTask
+    setTimeout(() => {
+      try {
+        if (task.status) {
+          console.log("Activando edición para status:", task.status);
+          setEditingTaskStatus(task.status);
+        }
+      } catch (error) {
+        console.error("Error al activar edición de estado:", error);
+      }
+    }, 300);
+  }}
+  size="small"
+>
+  Cambiar Estado
+</Button>,
             <Popconfirm
               title="¿Estás seguro de eliminar esta tarea?"
               onConfirm={() => handleDeletePersonalTask(task._id)}
@@ -1093,52 +1064,64 @@ const StudentDashboard = () => {
             
             <Collapse defaultActiveKey={['1']}>
               <Panel header="Información de la Tarea" key="1">
-                <p>
-                  <strong>Estado:</strong> 
-                  {editingTaskStatus ? (
-                    <div style={{ marginTop: 8 }}>
-                      <Select 
-                        value={editingTaskStatus}
-                        onChange={(value) => {
-                          console.log("Cambiando estado a:", value);
-                          // Aplicar inmediatamente el cambio de estado
-                          handleUpdateTaskStatus(selectedTask._id, value);
-                        }}
-                        style={{ width: 200 }}
-                        dropdownClassName={theme === 'dark' ? 'dark-theme' : ''}
-                      >
-                        {taskStatuses.map(status => (
-                          <Option key={status.value} value={status.value}>
-                            <Tag color={getStatusColor(status.value)} style={{ marginRight: 8 }}>
-                              {status.label}
-                            </Tag>
-                          </Option>
-                        ))}
-                      </Select>
-                      <Button 
-                        size="small" 
-                        style={{ marginLeft: 8 }}
-                        onClick={() => setEditingTaskStatus(null)}
-                      >
-                        Cancelar
-                      </Button>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <Tag color={getStatusColor(selectedTask.status)}>
-                        {getStatusLabel(selectedTask.status)}
-                      </Tag>
-                      <Button 
-                        type="link" 
-                        size="small" 
-                        onClick={() => setEditingTaskStatus(selectedTask.status)}
-                        style={{ marginLeft: 8 }}
-                      >
-                        Cambiar
-                      </Button>
-                    </div>
-                  )}
-                </p>
+               {/* En el modal de detalles de tarea, reemplaza la sección del estado con este código */}
+<p>
+  <strong>Estado:</strong> 
+  {editingTaskStatus !== null ? (
+    <div style={{ marginTop: 8 }}>
+      <Select 
+        defaultValue={selectedTask.status}
+        value={editingTaskStatus}
+        onChange={(value) => {
+          console.log("Cambiando estado de:", selectedTask.status, "a:", value);
+          setEditingTaskStatus(value);
+        }}
+        style={{ width: 200 }}
+      >
+        {taskStatuses.map(status => (
+          <Option key={status.value} value={status.value}>
+            {status.label}
+          </Option>
+        ))}
+      </Select>
+      <Button 
+        type="primary"
+        size="small" 
+        style={{ marginLeft: 8 }}
+        onClick={() => {
+          if (editingTaskStatus && editingTaskStatus !== selectedTask.status) {
+            handleUpdateTaskStatus(selectedTask._id, editingTaskStatus);
+          } else {
+            setEditingTaskStatus(null);
+          }
+        }}
+      >
+        Aplicar
+      </Button>
+      <Button 
+        size="small" 
+        style={{ marginLeft: 8 }}
+        onClick={() => setEditingTaskStatus(null)}
+      >
+        Cancelar
+      </Button>
+    </div>
+  ) : (
+    <div style={{ display: 'flex', alignItems: 'center' }}>
+      <Tag color={getStatusColor(selectedTask.status)}>
+        {getStatusLabel(selectedTask.status)}
+      </Tag>
+      <Button 
+        type="link" 
+        size="small" 
+        onClick={() => setEditingTaskStatus(selectedTask.status)}
+        style={{ marginLeft: 8 }}
+      >
+        Cambiar
+      </Button>
+    </div>
+  )}
+</p>
                 <p><strong>Fecha Límite:</strong> {new Date(selectedTask.dead_line).toLocaleString()}</p>
                 {selectedTask.category && (
                   <p><strong>Categoría:</strong> {selectedTask.category}</p>
