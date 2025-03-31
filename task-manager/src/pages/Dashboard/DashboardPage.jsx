@@ -222,7 +222,72 @@ const handleUpdateTaskStatus = async (taskId, newStatus) => {
       message.error('Error al guardar la tarea personal');
     }
   };
-
+// Función para que los estudiantes actualicen el estado de sus tareas
+const handleStudentUpdateTaskStatus = async (taskId, newStatus) => {
+  try {
+    // Mostrar mensaje de carga
+    const loadingKey = 'updatingStatus';
+    message.loading({ content: 'Actualizando estado...', key: loadingKey, duration: 0 });
+    
+    console.log(`Enviando actualización de estado para tarea ${taskId}`);
+    console.log(`Cuerpo de la petición:`, { status: newStatus });
+    
+    // Usar la nueva ruta específica para estudiantes
+    const response = await axios.post(
+      `${API_URL}/tasks/${taskId}/updateStatus`, 
+      { status: newStatus }, 
+      { headers }
+    );
+    
+    console.log("Respuesta del servidor:", response);
+    
+    if (response.status === 200 && response.data) {
+      // Actualizar la tarea seleccionada en el estado
+      if (response.data.task) {
+        setSelectedTask({...response.data.task});
+      } else {
+        // Si no hay datos de tarea en la respuesta, actualizar manualmente
+        if (selectedTask) {
+          setSelectedTask(prev => ({
+            ...prev,
+            status: newStatus
+          }));
+        }
+      }
+      
+      // Cerrar el selector de estado
+      setEditingTaskStatus(null);
+      
+      // Mensaje de éxito
+      message.success({ 
+        content: `Tarea actualizada a estado: ${getStatusLabel(newStatus)}`, 
+        key: loadingKey 
+      });
+      
+      // Refrescar las tareas
+      if (selectedGroup) {
+        fetchGroups();
+      }
+    } else {
+      throw new Error("La respuesta del servidor no fue exitosa");
+    }
+  } catch (error) {
+    console.error('Error al actualizar el estado de la tarea:', error);
+    
+    // Mostrar mensaje de error más específico
+    if (error.response) {
+      message.error({ 
+        content: `Error: ${error.response.data.message || 'No se pudo actualizar el estado'}`, 
+        key: 'updatingStatus' 
+      });
+    } else {
+      message.error({ 
+        content: 'Error al conectar con el servidor. Intenta nuevamente más tarde.', 
+        key: 'updatingStatus' 
+      });
+    }
+  }
+};
   // Update personal task status
   const handleUpdatePersonalTaskStatus = async (taskId, newStatus) => {
     try {
@@ -1065,17 +1130,14 @@ const handleUpdateTaskStatus = async (taskId, newStatus) => {
             <Collapse defaultActiveKey={['1']}>
               <Panel header="Información de la Tarea" key="1">
                {/* En el modal de detalles de tarea, reemplaza la sección del estado con este código */}
+{/* Dentro del modal de detalles de tarea */}
 <p>
   <strong>Estado:</strong> 
-  {editingTaskStatus !== null ? (
+  {editingTaskStatus ? (
     <div style={{ marginTop: 8 }}>
       <Select 
-        defaultValue={selectedTask.status}
         value={editingTaskStatus}
-        onChange={(value) => {
-          console.log("Cambiando estado de:", selectedTask.status, "a:", value);
-          setEditingTaskStatus(value);
-        }}
+        onChange={(value) => setEditingTaskStatus(value)}
         style={{ width: 200 }}
       >
         {taskStatuses.map(status => (
@@ -1090,7 +1152,8 @@ const handleUpdateTaskStatus = async (taskId, newStatus) => {
         style={{ marginLeft: 8 }}
         onClick={() => {
           if (editingTaskStatus && editingTaskStatus !== selectedTask.status) {
-            handleUpdateTaskStatus(selectedTask._id, editingTaskStatus);
+            // Usar la nueva función específica para estudiantes
+            handleStudentUpdateTaskStatus(selectedTask._id, editingTaskStatus);
           } else {
             setEditingTaskStatus(null);
           }
